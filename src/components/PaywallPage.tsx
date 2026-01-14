@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-    Crown,
     Check,
-    Lightning,
     Star,
     Sparkle,
     X,
@@ -13,7 +10,6 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { useRevenueCat } from '@/hooks/use-revenuecat';
 import { triggerImpactHaptic, triggerNotificationHaptic } from '@/lib/haptics';
@@ -47,8 +43,7 @@ const PRICING_TIERS: PricingTier[] = [
             'Basic templates',
         ],
         notIncluded: [
-            'Watermark on exports',
-            'No custom branding',
+            'Limited export formats',
         ],
         buttonText: 'Current Plan',
     },
@@ -63,9 +58,8 @@ const PRICING_TIERS: PricingTier[] = [
         features: [
             '10 lead magnets',
             'PDF & PNG export',
-            'No watermark',
+            'Longer lead magnets (up to 3k words)',
             'All templates',
-            'Custom branding',
             'Priority support',
         ],
         buttonText: 'Start Pro',
@@ -81,10 +75,8 @@ const PRICING_TIERS: PricingTier[] = [
         features: [
             'Unlimited lead magnets',
             'All export formats',
-            'No watermark',
+            'Longer lead magnets (up to 3k words)',
             'All templates',
-            'Custom branding',
-            'White-label option',
             'Priority generation',
             'Lifetime access',
         ],
@@ -107,7 +99,6 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
         unlimitedPackage,
         purchase,
         restore,
-        isLoading: rcLoading
     } = useRevenueCat();
     const [purchasing, setPurchasing] = useState<string | null>(null);
 
@@ -173,6 +164,14 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
         triggerImpactHaptic('light');
 
         if (!isSupported) {
+            // Mock restore for web dev
+            if (user) {
+                await updateUserPlan(user.uid, 'pro');
+                triggerNotificationHaptic('success');
+                alert('Restored PRO for testing');
+                onClose?.() || navigate('/dashboard');
+                return;
+            }
             alert('Restore purchases is only available in the iOS app.');
             return;
         }
@@ -184,7 +183,7 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
             if (success) {
                 triggerNotificationHaptic('success');
                 alert('Purchases restored successfully!');
-                onClose?.();
+                onClose?.() || navigate('/dashboard');
             } else {
                 triggerNotificationHaptic('warning');
                 alert('No previous purchases found.');
@@ -199,214 +198,96 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 py-8 px-4">
-            {/* Header */}
-            <div className="max-w-4xl mx-auto">
-                {onClose && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="mb-4"
-                        onClick={onClose}
-                    >
-                        <X size={24} />
-                    </Button>
-                )}
+        <div className="min-h-screen bg-background py-4 px-4 sm:px-6 flex flex-col items-center">
+            {/* Nav/Close */}
+            <div className="w-full max-w-5xl flex justify-between items-center mb-4">
+                <button onClick={() => onClose?.() || navigate(-1)} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors">
+                    <X size={24} />
+                </button>
+                <Button variant="ghost" className="text-sm font-medium" onClick={handleRestore}>
+                    Restore Purchases
+                </Button>
+            </div>
 
-                <div className="text-center mb-8">
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-4"
-                    >
-                        <Crown size={32} weight="fill" className="text-white" />
-                    </motion.div>
-                    <h1 className="text-3xl font-bold mb-2">Upgrade Your Plan</h1>
-                    <p className="text-muted-foreground max-w-md mx-auto">
-                        {getTriggerMessage()}
-                    </p>
-                </div>
-
-                {/* Pricing Cards */}
-                <div className="grid md:grid-cols-3 gap-4 mb-8">
-                    {PRICING_TIERS.map((tier, index) => (
-                        <motion.div
-                            key={tier.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                        >
-                            <Card
-                                className={`relative h-full ${tier.popular
-                                    ? 'border-primary ring-2 ring-primary/20'
-                                    : tier.id === currentPlan
-                                        ? 'border-muted'
-                                        : ''
-                                    }`}
-                            >
-                                {tier.popular && (
-                                    <Badge
-                                        className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary"
-                                    >
-                                        Most Popular
-                                    </Badge>
-                                )}
-                                {tier.id === 'unlimited' && (
-                                    <Badge
-                                        className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500"
-                                    >
-                                        Best Value
-                                    </Badge>
-                                )}
-
-                                <CardHeader className="text-center pb-2">
-                                    <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-2 ${tier.id === 'unlimited'
-                                        ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'
-                                        : tier.id === 'pro'
-                                            ? 'bg-primary/10 text-primary'
-                                            : 'bg-muted text-muted-foreground'
-                                        }`}>
-                                        {tier.icon}
-                                    </div>
-                                    <CardTitle className="text-xl">{tier.name}</CardTitle>
-                                    <p className="text-sm text-muted-foreground">{tier.description}</p>
-                                    <div className="mt-2">
-                                        <span className="text-3xl font-bold">{tier.price}</span>
-                                        <span className="text-muted-foreground text-sm">{tier.period}</span>
-                                    </div>
-                                </CardHeader>
-
-                                <CardContent className="pt-4">
-                                    <ul className="space-y-2 mb-6">
-                                        {tier.features.map((feature) => (
-                                            <li key={feature} className="flex items-start gap-2 text-sm">
-                                                <Check
-                                                    size={16}
-                                                    weight="bold"
-                                                    className="text-green-500 mt-0.5 flex-shrink-0"
-                                                />
-                                                <span>{feature}</span>
-                                            </li>
-                                        ))}
-                                        {tier.notIncluded?.map((feature) => (
-                                            <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
-                                                <X
-                                                    size={16}
-                                                    weight="bold"
-                                                    className="text-muted-foreground mt-0.5 flex-shrink-0"
-                                                />
-                                                <span>{feature}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-
-                                    <Button
-                                        className={`w-full ${tier.id === 'unlimited'
-                                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'
-                                            : tier.popular
-                                                ? ''
-                                                : ''
-                                            }`}
-                                        variant={tier.id === currentPlan ? 'outline' : tier.popular ? 'default' : 'secondary'}
-                                        disabled={tier.id === currentPlan || purchasing !== null || rcLoading}
-                                        onClick={() => handlePurchase(tier)}
-                                    >
-                                        {purchasing === tier.id ? (
-                                            <>
-                                                <CircleNotch size={16} className="mr-2 animate-spin" />
-                                                Processing...
-                                            </>
-                                        ) : tier.id === currentPlan ? (
-                                            <>
-                                                <Check size={16} className="mr-2" />
-                                                Current Plan
-                                            </>
-                                        ) : (
-                                            <>
-                                                {tier.id === 'unlimited' && <Lightning size={16} weight="fill" className="mr-2" />}
-                                                {tier.buttonText}
-                                            </>
-                                        )}
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-                    ))}
-                </div>
-
-                {/* Features comparison */}
-                <div className="bg-card rounded-xl p-6 mb-6">
-                    <h3 className="font-semibold mb-4 text-center">Why Upgrade?</h3>
-                    <div className="grid md:grid-cols-3 gap-4 text-center">
-                        <div className="p-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                <Star size={20} weight="fill" className="text-primary" />
-                            </div>
-                            <h4 className="font-medium mb-1">More Lead Magnets</h4>
-                            <p className="text-sm text-muted-foreground">
-                                Create ebooks, checklists, guides & more
-                            </p>
-                        </div>
-                        <div className="p-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                <Sparkle size={20} weight="fill" className="text-primary" />
-                            </div>
-                            <h4 className="font-medium mb-1">No Watermarks</h4>
-                            <p className="text-sm text-muted-foreground">
-                                Clean, professional exports
-                            </p>
-                        </div>
-                        <div className="p-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                <Crown size={20} weight="fill" className="text-primary" />
-                            </div>
-                            <h4 className="font-medium mb-1">Custom Branding</h4>
-                            <p className="text-sm text-muted-foreground">
-                                Your colors, logo, and style
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Restore purchases */}
-                <div className="text-center">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRestore}
-                        disabled={purchasing !== null || rcLoading}
-                        className="text-muted-foreground"
-                    >
-                        {purchasing === 'restore' ? (
-                            <>
-                                <CircleNotch size={16} className="mr-2 animate-spin" />
-                                Restoring...
-                            </>
-                        ) : (
-                            'Restore Purchases'
-                        )}
-                    </Button>
-                </div>
-
-                {/* Terms */}
-                <p className="text-xs text-center text-muted-foreground mt-4 max-w-md mx-auto">
-                    By purchasing, you agree to our{' '}
-                    <button
-                        className="underline hover:text-foreground"
-                        onClick={() => navigate('/terms')}
-                    >
-                        Terms of Service
-                    </button>{' '}
-                    and{' '}
-                    <button
-                        className="underline hover:text-foreground"
-                        onClick={() => navigate('/privacy')}
-                    >
-                        Privacy Policy
-                    </button>
-                    . Subscriptions auto-renew unless cancelled.
+            <div className="text-center max-w-2xl mx-auto mb-6 space-y-2">
+                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+                    Upgrade to Professional
+                </h1>
+                <p className="text-base text-muted-foreground max-w-lg mx-auto">
+                    {getTriggerMessage()}
                 </p>
             </div>
+
+            <div className="grid md:grid-cols-3 gap-4 w-full max-w-5xl mb-6">
+                {PRICING_TIERS.map((tier) => {
+                    const isCurrent = currentPlan === tier.id;
+                    const isPopular = tier.popular;
+
+                    return (
+                        <Card
+                            key={tier.id}
+                            className={`relative flex flex-col h-full transition-all duration-200 ${isPopular
+                                ? 'border-primary shadow-lg scale-105 z-10'
+                                : 'border-border hover:border-primary/50'
+                                } ${isCurrent ? 'bg-secondary/50' : 'bg-card'}`}
+                        >
+                            {isPopular && (
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-bold rounded-full shadow-md">
+                                    MOST POPULAR
+                                </div>
+                            )}
+
+                            <CardHeader className="pb-3 text-center">
+                                <div className="mx-auto w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary">
+                                    {tier.icon}
+                                </div>
+                                <CardTitle className="text-lg font-bold">{tier.name}</CardTitle>
+                                <div className="flex items-baseline justify-center gap-1 mt-1">
+                                    <span className="text-3xl font-bold">{tier.price}</span>
+                                    <span className="text-muted-foreground text-sm">{tier.period}</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">{tier.description}</p>
+                            </CardHeader>
+
+                            <CardContent className="flex-1 flex flex-col pt-0">
+                                <ul className="space-y-2 mb-6 flex-1">
+                                    {tier.features.map((feature, index) => (
+                                        <li key={index} className="flex items-start gap-2 text-sm">
+                                            <Check size={14} className="text-green-500 mt-0.5 shrink-0" weight="bold" />
+                                            <span className="text-muted-foreground text-xs">{feature}</span>
+                                        </li>
+                                    ))}
+                                    {tier.notIncluded?.map((feature, index) => (
+                                        <li key={index} className="flex items-start gap-2 text-sm opacity-50">
+                                            <X size={14} className="text-muted-foreground mt-0.5 shrink-0" />
+                                            <span className="text-muted-foreground text-xs">{feature}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                <Button
+                                    size="default"
+                                    variant={isPopular ? 'gradient' : 'outline'}
+                                    className="w-full"
+                                    disabled={isCurrent || purchasing !== null}
+                                    onClick={() => handlePurchase(tier)}
+                                >
+                                    {purchasing === tier.id ? (
+                                        <CircleNotch size={18} className="animate-spin mr-2" />
+                                    ) : (
+                                        isCurrent ? 'Current Plan' : tier.buttonText
+                                    )}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
+
+            <p className="text-center text-xs text-muted-foreground max-w-md mx-auto">
+                Secure payment via Apple App Store. Cancel anytime in your subscription settings.
+                By continuing, you agree to our Terms of Service and Privacy Policy.
+            </p>
         </div>
     );
 }

@@ -10,6 +10,7 @@ import {
   OAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  deleteUser,
   type User,
   type Auth
 } from 'firebase/auth';
@@ -483,5 +484,45 @@ export const checkAndIncrementUsage = async (
     // If Firestore permissions fail, allow generation anyway
     console.log('checkAndIncrementUsage error (allowing generation):', error);
     return { allowed: true, remaining: maxLeadMagnets };
+  }
+};
+
+// ============================================
+// ACCOUNT DELETION (Required for Apple App Store)
+// ============================================
+
+/**
+ * Delete user account and all associated data
+ * Required by Apple App Store Guidelines 5.1.1
+ */
+export const deleteUserAccount = async (userId: string): Promise<void> => {
+  if (!db || !auth?.currentUser) {
+    throw new Error('Not authenticated');
+  }
+
+  try {
+    // 1. Delete all user's lead magnets from Firestore
+    const userMagnets = await getUserLeadMagnets(userId);
+    for (const magnet of userMagnets) {
+      try {
+        await deleteLeadMagnet(magnet.id);
+      } catch (e) {
+        console.log('Could not delete lead magnet:', magnet.id, e);
+      }
+    }
+
+    // 2. Delete user profile from Firestore
+    try {
+      const userRef = doc(db, 'users', userId);
+      await deleteDoc(userRef);
+    } catch (e) {
+      console.log('Could not delete user profile:', e);
+    }
+
+    // 3. Delete Firebase Auth user (must be done last)
+    await deleteUser(auth.currentUser);
+  } catch (error) {
+    console.error('Account deletion error:', error);
+    throw error;
   }
 };

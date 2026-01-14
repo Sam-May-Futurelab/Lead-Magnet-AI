@@ -22,6 +22,7 @@ interface LeadMagnetState {
   setProgress: (progress: number) => void;
   setLeadMagnets: (leadMagnets: LeadMagnet[]) => void;
   addLeadMagnet: (leadMagnet: LeadMagnet) => void;
+  updateLeadMagnet: (id: string, updates: Partial<LeadMagnet>) => void;
   removeLeadMagnet: (id: string) => void;
   reset: () => void;
 }
@@ -58,6 +59,12 @@ export const useLeadMagnetStore = create<LeadMagnetState>()(
 
       addLeadMagnet: (leadMagnet) => set((state) => ({
         leadMagnets: [leadMagnet, ...state.leadMagnets],
+      })),
+
+      updateLeadMagnet: (id, updates) => set((state) => ({
+        leadMagnets: state.leadMagnets.map((lm) =>
+          lm.id === id ? { ...lm, ...updates, updatedAt: new Date() } : lm
+        ),
       })),
 
       removeLeadMagnet: (id) => set((state) => ({

@@ -5,16 +5,20 @@ import {
   Plus,
   Trash,
   Download,
-  Eye,
   Sparkle,
   FolderOpen,
   X,
   Warning,
-  CircleNotch
+  CircleNotch,
+  FileText,
+  ChartPieSlice,
+  Crown,
+  ListChecks,
+  PencilSimple,
+  FloppyDisk,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { useLeadMagnetStore } from '@/stores/lead-magnet-store';
 import { getUserLeadMagnets, deleteLeadMagnet } from '@/lib/firebase';
@@ -27,12 +31,15 @@ import { triggerImpactHaptic, triggerNotificationHaptic } from '@/lib/haptics';
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
-  const { leadMagnets, setLeadMagnets, removeLeadMagnet } = useLeadMagnetStore();
+  const { leadMagnets, setLeadMagnets, removeLeadMagnet, updateLeadMagnet } = useLeadMagnetStore();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMagnet, setSelectedMagnet] = useState<LeadMagnet | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<LeadMagnet | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportProgress, setExportProgress] = useState('Preparing export...');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -90,9 +97,11 @@ export function DashboardPage() {
     const plan = userProfile?.plan || 'free';
 
     setExportingId(magnet.id);
+    setExportProgress('Preparing export...');
     triggerImpactHaptic('medium');
 
     try {
+      setExportProgress('Generating PDF...');
       const result = await exportLeadMagnet({
         format: 'pdf',
         leadMagnet: magnet,
@@ -101,6 +110,7 @@ export function DashboardPage() {
       });
 
       if (result.success && result.blob && result.filename) {
+        setExportProgress('Finalizing...');
         await shareExport(result.blob, result.filename);
         triggerNotificationHaptic('success');
       } else {
@@ -114,8 +124,39 @@ export function DashboardPage() {
     }
   };
 
+  const handleStartEdit = () => {
+    if (selectedMagnet) {
+      setEditedContent(selectedMagnet.content);
+      setIsEditing(true);
+      triggerImpactHaptic('light');
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (selectedMagnet) {
+      updateLeadMagnet(selectedMagnet.id, { content: editedContent });
+      setSelectedMagnet({ ...selectedMagnet, content: editedContent });
+      setIsEditing(false);
+      triggerNotificationHaptic('success');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedContent('');
+    triggerImpactHaptic('light');
+  };
+
+  const handleCloseModal = () => {
+    setSelectedMagnet(null);
+    setIsEditing(false);
+    setEditedContent('');
+  };
+
   const limits = userProfile ? PLAN_LIMITS[userProfile.plan] : PLAN_LIMITS.free;
-  const leadMagnetCount = userProfile?.leadMagnetsCreated || leadMagnets.length;
+  // Only count lead magnets belonging to current user
+  const userLeadMagnets = user ? leadMagnets.filter(m => m.userId === user.uid) : [];
+  const leadMagnetCount = userProfile?.leadMagnetsCreated || userLeadMagnets.length;
   const usagePercent = limits.maxLeadMagnets === -1
     ? 0
     : (leadMagnetCount / limits.maxLeadMagnets) * 100;
@@ -129,159 +170,168 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen py-8 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen py-4 px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">My Lead Magnets</h1>
-            <p className="text-muted-foreground mt-1">
-              {leadMagnets.length} {leadMagnets.length === 1 ? 'magnet' : 'magnets'} created
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage and track your lead magnets
             </p>
           </div>
 
           <Button
-            variant="gradient"
+            size="default"
             onClick={() => {
               triggerImpactHaptic('medium');
               navigate('/create');
             }}
-            className="gap-2"
+            className="gap-2 shadow-sm"
           >
             <Plus size={18} weight="bold" />
-            Create New
+            Create Lead Magnet
           </Button>
         </div>
 
-        {/* Usage Card */}
-        <Card className="mb-8">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Lead Magnets</p>
-                <p className="text-2xl font-bold">
-                  {leadMagnetCount} / {limits.maxLeadMagnets === -1 ? '∞' : limits.maxLeadMagnets}
-                </p>
+        {/* Stats Section */}
+        <div className="grid gap-3 md:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Plan Usage</CardTitle>
+              <ChartPieSlice size={16} className="text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {leadMagnetCount} / {limits.maxLeadMagnets === -1 ? '∞' : limits.maxLeadMagnets}
               </div>
-              <div className="text-right">
-                <Badge variant={userProfile?.plan === 'free' ? 'secondary' : 'default'}>
-                  {userProfile?.plan?.toUpperCase() || 'FREE'} Plan
-                </Badge>
-                {userProfile?.plan === 'free' && (
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="mt-1"
-                    onClick={() => navigate('/paywall')}
-                  >
-                    Upgrade for more
-                  </Button>
-                )}
+              <div className="mt-2 h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                />
               </div>
-            </div>
-            <div className="mt-4 h-2 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${Math.min(usagePercent, 100)}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Current Plan</CardTitle>
+              <Crown size={16} className="text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold capitalize">{userProfile?.plan || 'Free'}</div>
+              {userProfile?.plan === 'free' && (
+                <Button variant="link" className="p-0 h-auto text-xs text-muted-foreground mt-1" onClick={() => navigate('/paywall')}>
+                  Upgrade to Pro &rarr;
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Lead Magnets Grid */}
-        {leadMagnets.length === 0 ? (
-          <Card className="text-center py-16">
-            <CardContent>
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <FolderOpen size={32} className="text-primary" />
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold tracking-tight">Recent Projects</h2>
+          {userLeadMagnets.length === 0 ? (
+            <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed">
+              <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mb-4">
+                <FolderOpen size={24} className="text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">No lead magnets yet</h3>
-              <p className="text-muted-foreground mb-6">
-                Create your first lead magnet to start growing your email list
+              <h3 className="text-lg font-medium mb-1">No lead magnets yet</h3>
+              <p className="text-muted-foreground mb-6 max-w-sm">
+                Create your first lead magnet to start growing your email list with AI-generated content.
               </p>
               <Button
-                variant="gradient"
                 onClick={() => navigate('/create')}
                 className="gap-2"
               >
-                <Sparkle size={18} weight="fill" />
+                <Sparkle size={16} weight="fill" />
                 Create Your First
               </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {leadMagnets.map((magnet, index) => (
-              <motion.div
-                key={magnet.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card className="h-full hover:border-primary/50 transition-colors">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg line-clamp-2">
-                        {magnet.title}
-                      </CardTitle>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                        {formatRelativeTime(magnet.createdAt)}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                      <span>{magnet.wordCount} words</span>
-                      {magnet.itemCount && (
-                        <>
-                          <span>•</span>
-                          <span>{magnet.itemCount} items</span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 gap-1"
-                        onClick={() => {
-                          triggerImpactHaptic('light');
-                          setSelectedMagnet(magnet);
-                        }}
-                      >
-                        <Eye size={14} />
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 gap-1"
-                        disabled={exportingId === magnet.id}
-                        onClick={() => handleExportPDF(magnet)}
-                      >
-                        {exportingId === magnet.id ? (
-                          <CircleNotch size={14} className="animate-spin" />
-                        ) : (
-                          <Download size={14} />
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {userLeadMagnets.map((magnet, index) => (
+                <motion.div
+                  key={magnet.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <Card className="h-full flex flex-col hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1 flex-1">
+                          <CardTitle className="text-base font-semibold line-clamp-2 leading-tight">
+                            {magnet.title}
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground">
+                            {formatRelativeTime(magnet.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex-1 pb-3">
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <FileText size={14} />
+                          <span>{magnet.wordCount} words</span>
+                        </div>
+                        {magnet.itemCount && (
+                          <div className="flex items-center gap-1">
+                            <ListChecks size={14} />
+                            <span>{magnet.itemCount} items</span>
+                          </div>
                         )}
-                        PDF
-                      </Button>
+                      </div>
+                    </CardContent>
+                    <div className="p-4 pt-0 mt-auto flex items-center justify-between border-t border-border/40 pt-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => {
+                            triggerImpactHaptic('light');
+                            setSelectedMagnet(magnet);
+                          }}
+                        >
+                          Preview
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs gap-1.5"
+                          disabled={exportingId === magnet.id}
+                          onClick={() => handleExportPDF(magnet)}
+                        >
+                          {exportingId === magnet.id ? (
+                            <>
+                              <CircleNotch size={12} className="animate-spin" />
+                              <span className="text-[10px]">{exportProgress.split(' ')[0]}</span>
+                            </>
+                          ) : (
+                            <Download size={12} />
+                          )}
+                          PDF
+                        </Button>
+                      </div>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => handleDelete(magnet)}
                       >
                         <Trash size={14} />
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
 
         {/* Preview Modal */}
         <AnimatePresence>
@@ -291,39 +341,75 @@ export function DashboardPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-              onClick={() => setSelectedMagnet(null)}
+              onClick={handleCloseModal}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-background rounded-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden"
+                className="bg-background rounded-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="p-6 border-b flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold">{selectedMagnet.title}</h2>
-                  </div>
-                  <div className="flex gap-2">
+                <div className="p-6 border-b shrink-0 bg-background/95 backdrop-blur z-10">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <h2 className="text-xl font-bold leading-tight">{selectedMagnet.title}</h2>
                     <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={exportingId === selectedMagnet.id}
-                      onClick={() => handleExportPDF(selectedMagnet)}
+                      variant="ghost"
+                      size="icon"
+                      className="-mt-1 -mr-2 text-muted-foreground hover:text-foreground shrink-0"
+                      onClick={handleCloseModal}
                     >
-                      {exportingId === selectedMagnet.id ? (
-                        <CircleNotch size={16} className="animate-spin mr-2" />
-                      ) : (
-                        <Download size={16} className="mr-2" />
-                      )}
-                      Export PDF
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => setSelectedMagnet(null)}>
                       <X size={20} />
                     </Button>
                   </div>
+                  <div className="flex gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="flex-1 justify-center"
+                          onClick={handleCancelEdit}
+                        >
+                          <X size={16} className="mr-2" />
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="gradient"
+                          className="flex-1 justify-center"
+                          onClick={handleSaveEdit}
+                        >
+                          <FloppyDisk size={16} className="mr-2" />
+                          Save
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="flex-1 justify-center"
+                          onClick={handleStartEdit}
+                        >
+                          <PencilSimple size={16} className="mr-2" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1 justify-center"
+                          disabled={exportingId === selectedMagnet.id}
+                          onClick={() => handleExportPDF(selectedMagnet)}
+                        >
+                          {exportingId === selectedMagnet.id ? (
+                            <CircleNotch size={16} className="animate-spin mr-2" />
+                          ) : (
+                            <Download size={16} className="mr-2" />
+                          )}
+                          Export PDF
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="p-6 overflow-y-auto min-h-0">
                   {/* Styled Content Preview */}
                   <style>{`
                     .preview-content {
@@ -402,12 +488,38 @@ export function DashboardPage() {
                       font-weight: 600;
                       color: hsl(var(--primary));
                     }
+                    .edit-textarea {
+                      width: 100%;
+                      min-height: 300px;
+                      padding: 1rem;
+                      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                      font-size: 0.875rem;
+                      line-height: 1.6;
+                      background: hsl(var(--background));
+                      color: hsl(var(--foreground));
+                      border: 1px solid hsl(var(--border));
+                      border-radius: 8px;
+                      resize: vertical;
+                    }
+                    .edit-textarea:focus {
+                      outline: none;
+                      border-color: hsl(var(--primary));
+                    }
                   `}</style>
-                  <div
-                    ref={contentRef}
-                    className="preview-content"
-                    dangerouslySetInnerHTML={{ __html: selectedMagnet.content }}
-                  />
+                  {isEditing ? (
+                    <textarea
+                      className="edit-textarea"
+                      value={editedContent}
+                      onChange={(e) => setEditedContent(e.target.value)}
+                      placeholder="Edit your lead magnet content (HTML)..."
+                    />
+                  ) : (
+                    <div
+                      ref={contentRef}
+                      className="preview-content"
+                      dangerouslySetInnerHTML={{ __html: selectedMagnet.content }}
+                    />
+                  )}
                 </div>
               </motion.div>
             </motion.div>

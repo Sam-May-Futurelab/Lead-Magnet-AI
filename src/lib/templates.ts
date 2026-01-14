@@ -1,7 +1,7 @@
 import type { LeadMagnetTemplate, LeadMagnetType } from './types';
 
 /**
- * Lead Magnet Type Metadata - Checklist only
+ * Lead Magnet Type Metadata
  */
 export const LEAD_MAGNET_TYPES: Record<LeadMagnetType, {
   label: string;
@@ -13,8 +13,8 @@ export const LEAD_MAGNET_TYPES: Record<LeadMagnetType, {
 }> = {
   checklist: {
     label: 'Checklist',
-    description: 'A valuable lead magnet your audience will love',
-    icon: '',
+    description: 'Calculated steps to achieve a goal',
+    icon: 'CheckSquare',
     defaultItemCount: 10,
     examples: [
       'Product Launch Checklist',
@@ -22,20 +22,51 @@ export const LEAD_MAGNET_TYPES: Record<LeadMagnetType, {
       'Website Audit Checklist',
     ],
     structureHint: `Create a professional, high-value lead magnet with:
-
-1. **Compelling Introduction** - Hook the reader, explain why this matters, and what they'll achieve
-
-2. **Clear Sections** - Organize content into logical sections with descriptive headings
-
-3. **Actionable Items** - Each point should be specific, practical, and immediately usable
-
-4. **Pro Tips** - Include expert insights, common mistakes to avoid, or bonus strategies
-
-5. **Quick Wins** - Highlight items that give immediate results
-
-6. **Summary/Next Steps** - End with key takeaways and a clear call-to-action
-
-Make it feel like a premium resource worth paying for. Use clear formatting, bullet points, and make every item valuable.`,
+1. **Compelling Introduction** - Hook the reader
+2. **Clear Sections** - Organize content
+3. **Actionable Items** - Specific tasks`,
+  },
+  cheatsheet: {
+    label: 'Cheat Sheet',
+    description: 'Quick reference guide',
+    icon: 'List',
+    examples: ['React Hooks Cheat Sheet', 'Keto Diet Cheat Sheet'],
+    structureHint: `Create a concise reference guide.`,
+  },
+  guide: {
+    label: 'Mini-Guide',
+    description: 'Short educational content relative to a specific topic',
+    icon: 'Book',
+    examples: ['Beginners Guide to SEO', 'First Time Homebuyer Guide'],
+    structureHint: `Create an educational guide.`,
+  },
+  template: {
+    label: 'Template',
+    description: 'Fill-in-the-blank template',
+    icon: 'Copy',
+    examples: ['Email Marketing Templates', 'Social Media Caption Templates'],
+    structureHint: `Create a usable template structure.`,
+  },
+  swipefile: {
+    label: 'Swipe File',
+    description: 'Copy-and-paste examples',
+    icon: 'Files',
+    examples: ['High Converting Headlines', 'Sales Email Swipe File'],
+    structureHint: `Create a collection of proven examples.`,
+  },
+  resourcelist: {
+    label: 'Resource List',
+    description: 'Curated list of tools/resources',
+    icon: 'ListBullets',
+    examples: ['Best AI Tools for 2024', 'Remote Work Tools'],
+    structureHint: `Create a curated list of valuable resources.`,
+  },
+  worksheet: {
+    label: 'Worksheet',
+    description: 'Interactive worksheet',
+    icon: 'Pencil',
+    examples: ['Goal Setting Worksheet', 'Budget Planner Worksheet'],
+    structureHint: `Create an interactive worksheet.`,
   },
 };
 

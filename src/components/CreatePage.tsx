@@ -6,6 +6,9 @@ import {
   ArrowRight,
   DownloadSimple,
   Lock,
+  PencilSimple,
+  FloppyDisk,
+  X,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,20 +38,24 @@ export function CreatePage() {
     updateCurrent,
     setGenerating,
     addLeadMagnet,
+    updateLeadMagnet,
   } = useLeadMagnetStore();
 
-  // Always use checklist type - simplified UX
   const selectedType: LeadMagnetType = 'checklist';
 
   const [step, setStep] = useState<Step>('details');
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [targetAudience, setTargetAudience] = useState('');
-  const [tone, setTone] = useState<Tone>('friendly');
+  // Simplified state
+  const [targetAudience] = useState('');
+  const [tone] = useState<Tone>('friendly');
   const [length, setLength] = useState<Length>('short');
   const [generatedContent, setGeneratedContent] = useState('');
   const [currentLeadMagnetId, setCurrentLeadMagnetId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState('Preparing export...');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Check usage limit on mount - redirect to paywall if at limit
@@ -202,111 +209,85 @@ export function CreatePage() {
   };
 
   const renderDetailsForm = () => (
-    <div className="max-w-2xl mx-auto">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Create Your Checklist</h1>
-        <p className="text-muted-foreground">Tell us what you want to create and we'll generate an actionable checklist</p>
+    <div className="max-w-3xl mx-auto py-4">
+      <div className="mb-4 space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">Create Your Lead Magnet</h1>
+        <p className="text-sm text-muted-foreground">Tell us what you want to create and we'll make a lead magnet that converts.</p>
       </div>
 
-      <Card>
-        <CardContent className="p-6 space-y-6">
+      <Card className="shadow-sm border-border/60">
+        <CardContent className="p-6 space-y-5">
           {/* Title */}
           <div className="space-y-2">
-            <Label htmlFor="title">Checklist Title *</Label>
+            <Label htmlFor="title" className="text-sm font-medium">Title</Label>
             <Input
               id="title"
               placeholder="e.g., The Ultimate Product Launch Checklist"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              className="h-10"
             />
           </div>
 
           {/* Prompt */}
           <div className="space-y-2">
-            <Label htmlFor="prompt">What should it cover? *</Label>
+            <Label htmlFor="prompt" className="text-sm font-medium">What should it cover?</Label>
             <Textarea
               id="prompt"
-              placeholder="Describe the content, key points, or topics you want covered..."
+              placeholder="Describe the content, key points, or topics you want covered (e.g., for entrepreneurs...)"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
+              rows={6}
+              className="resize-none"
             />
           </div>
 
-          {/* Target Audience */}
+          {/* Length */}
           <div className="space-y-2">
-            <Label htmlFor="audience">Target Audience (optional)</Label>
-            <Input
-              id="audience"
-              placeholder="e.g., Entrepreneurs launching their first product"
-              value={targetAudience}
-              onChange={(e) => setTargetAudience(e.target.value)}
-            />
-          </div>
-
-          {/* Tone & Length */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Tone</Label>
-              <Select value={tone} onValueChange={(v) => setTone(v as Tone)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="professional">Professional</SelectItem>
-                  <SelectItem value="friendly">Friendly</SelectItem>
-                  <SelectItem value="educational">Educational</SelectItem>
-                  <SelectItem value="persuasive">Persuasive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Length</Label>
-              <Select
-                value={length}
-                onValueChange={(v) => {
-                  const plan = userProfile?.plan || 'free';
-                  if ((v === 'standard' || v === 'detailed') && plan === 'free') {
-                    navigate('/paywall?trigger=length');
-                    return;
-                  }
-                  setLength(v as Length);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="short">Short (500-800 words)</SelectItem>
-                  <SelectItem value="standard">
-                    <span className="flex items-center gap-2">
-                      Standard (1000-1500 words)
-                      {(userProfile?.plan || 'free') === 'free' && <Lock size={14} className="text-muted-foreground" />}
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="detailed">
-                    <span className="flex items-center gap-2">
-                      Detailed (2000-3000 words)
-                      {(userProfile?.plan || 'free') === 'free' && <Lock size={14} className="text-muted-foreground" />}
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Label className="text-sm font-medium">Length</Label>
+            <Select
+              value={length}
+              onValueChange={(v) => {
+                const plan = userProfile?.plan || 'free';
+                if ((v === 'standard' || v === 'detailed') && plan === 'free') {
+                  navigate('/paywall?trigger=length');
+                  return;
+                }
+                setLength(v as Length);
+              }}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="short">Short (500-800 words)</SelectItem>
+                <SelectItem value="standard">
+                  <span className="flex items-center gap-2">
+                    Standard (1000-1500 words)
+                    {(userProfile?.plan || 'free') === 'free' && <Lock size={14} className="text-muted-foreground" />}
+                  </span>
+                </SelectItem>
+                <SelectItem value="detailed">
+                  <span className="flex items-center gap-2">
+                    Detailed (2000-3000 words)
+                    {(userProfile?.plan || 'free') === 'free' && <Lock size={14} className="text-muted-foreground" />}
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Generate Button */}
           <Button
-            size="lg"
+            size="default"
             variant="gradient"
-            className="w-full gap-2"
+            className="w-full gap-2 shadow-lg shadow-primary/20"
             onClick={handleGenerate}
             disabled={!title || !prompt}
           >
-            <Sparkle size={20} weight="fill" />
+            <Sparkle size={18} weight="fill" />
             Generate Lead Magnet
-            <ArrowRight size={20} />
+            <ArrowRight size={18} />
           </Button>
         </CardContent>
       </Card>
@@ -319,11 +300,11 @@ export function CreatePage() {
         variant="magic"
         messages={[
           'Analyzing your topic...',
-          'Creating checklist items...',
-          'Making each step actionable...',
+          'Drafting content...',
+          'Polishing items...',
           'Adding finishing touches...',
         ]}
-        currentOperation="Creating your checklist"
+        currentOperation="Creating your lead magnet"
       />
     </div>
   );
@@ -341,6 +322,7 @@ export function CreatePage() {
     }
 
     setIsExporting(true);
+    setExportProgress('Preparing export...');
     triggerImpactHaptic('medium');
 
     try {
@@ -371,6 +353,7 @@ export function CreatePage() {
         },
       };
 
+      setExportProgress('Generating PDF...');
       const result = await exportLeadMagnet({
         format,
         leadMagnet,
@@ -393,31 +376,81 @@ export function CreatePage() {
     }
   };
 
+  const handleStartEdit = () => {
+    setEditedContent(generatedContent);
+    setIsEditing(true);
+    triggerImpactHaptic('light');
+  };
+
+  const handleSaveEdit = () => {
+    setGeneratedContent(editedContent);
+    setIsEditing(false);
+    // Update in store if we have an ID
+    if (currentLeadMagnetId) {
+      updateLeadMagnet(currentLeadMagnetId, { content: editedContent });
+    }
+    triggerNotificationHaptic('success');
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedContent('');
+    triggerImpactHaptic('light');
+  };
+
   const renderPreview = () => (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         <h1 className="text-2xl font-bold">{title}</h1>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/dashboard')}>
             View All
           </Button>
-          <Button
-            variant="gradient"
-            onClick={() => handleExport('pdf')}
-            disabled={isExporting}
-          >
-            {isExporting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <DownloadSimple size={18} className="mr-2" />
-                Download PDF
-              </>
-            )}
-          </Button>
+          {isEditing ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+              >
+                <X size={18} className="mr-2" />
+                Cancel
+              </Button>
+              <Button
+                variant="gradient"
+                onClick={handleSaveEdit}
+              >
+                <FloppyDisk size={18} className="mr-2" />
+                Save
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleStartEdit}
+              >
+                <PencilSimple size={18} className="mr-2" />
+                Edit
+              </Button>
+              <Button
+                variant="gradient"
+                onClick={() => handleExport('pdf')}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    {exportProgress}
+                  </>
+                ) : (
+                  <>
+                    <DownloadSimple size={18} className="mr-2" />
+                    Download PDF
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -559,12 +592,36 @@ export function CreatePage() {
               border-radius: 12px;
               border-left: 4px solid hsl(var(--primary));
             }
+            .edit-textarea {
+              width: 100%;
+              min-height: 400px;
+              padding: 1.5rem;
+              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              font-size: 0.875rem;
+              line-height: 1.6;
+              background: hsl(var(--background));
+              color: hsl(var(--foreground));
+              border: none;
+              resize: vertical;
+            }
+            .edit-textarea:focus {
+              outline: none;
+            }
           `}</style>
-          <div
-            ref={contentRef}
-            className="lead-magnet-content"
-            dangerouslySetInnerHTML={{ __html: generatedContent }}
-          />
+          {isEditing ? (
+            <textarea
+              className="edit-textarea"
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              placeholder="Edit your lead magnet content (HTML)..."
+            />
+          ) : (
+            <div
+              ref={contentRef}
+              className="lead-magnet-content"
+              dangerouslySetInnerHTML={{ __html: generatedContent }}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -575,7 +632,6 @@ export function CreatePage() {
             setStep('details');
             setTitle('');
             setPrompt('');
-            setTargetAudience('');
             setGeneratedContent('');
             setCurrentLeadMagnetId(null);
             triggerImpactHaptic('light');

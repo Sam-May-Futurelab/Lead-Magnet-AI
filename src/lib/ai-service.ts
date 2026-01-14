@@ -286,7 +286,7 @@ TARGET LENGTH: ${lengthGuide[request.length]}`;
     prompt += `\n\nNICHE/INDUSTRY: ${request.niche}`;
   }
 
-  if (request.itemCount && (request.type === 'checklist' || request.type === 'toolkit')) {
+  if (request.itemCount && (request.type === 'checklist' || request.type === 'resourcelist')) {
     prompt += `\n\nNUMBER OF ITEMS: ${request.itemCount}`;
   }
 

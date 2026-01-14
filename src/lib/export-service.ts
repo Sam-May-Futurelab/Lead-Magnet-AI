@@ -4,6 +4,7 @@ import { Share } from '@capacitor/share';
 import { getApiUrl } from './api';
 import type { LeadMagnet, UserProfile } from './types';
 import { PLAN_LIMITS } from './types';
+import { LEAD_MAGNET_TYPES } from './templates';
 
 export type ExportFormat = 'pdf' | 'html';
 
@@ -33,16 +34,9 @@ export function canExportFormat(format: ExportFormat, plan: UserProfile['plan'])
 }
 
 /**
- * Check if export should include watermark
- */
-export function shouldAddWatermark(plan: UserProfile['plan']): boolean {
-    return !PLAN_LIMITS[plan].removeWatermark;
-}
-
-/**
  * Generate HTML document for export
  */
-function generateExportHTML(leadMagnet: LeadMagnet, addWatermark: boolean): string {
+function generateExportHTML(leadMagnet: LeadMagnet): string {
     const primaryColor = leadMagnet.design?.primaryColor || '#8B5CF6';
 
     return `
@@ -187,25 +181,9 @@ function generateExportHTML(leadMagnet: LeadMagnet, addWatermark: boolean): stri
             margin: 32px 0;
         }
         
-        .watermark {
-            margin-top: 48px;
-            padding-top: 24px;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            color: #9ca3af;
-            font-size: 12px;
-        }
-        
         @media print {
             body {
                 padding: 0;
-            }
-            
-            .watermark {
-                position: fixed;
-                bottom: 20px;
-                left: 0;
-                right: 0;
             }
         }
     </style>
@@ -213,18 +191,12 @@ function generateExportHTML(leadMagnet: LeadMagnet, addWatermark: boolean): stri
 <body>
     <div class="header">
         <h1 class="title">${leadMagnet.title}</h1>
-        <span class="badge">Checklist</span>
+        <span class="badge">${LEAD_MAGNET_TYPES[leadMagnet.type]?.label || 'Lead Magnet'}</span>
     </div>
     
     <div class="content">
         ${leadMagnet.content}
     </div>
-    
-    ${addWatermark ? `
-    <div class="watermark">
-        Made with LeadMagnet AI
-    </div>
-    ` : ''}
 </body>
 </html>`;
 }
@@ -233,9 +205,9 @@ function generateExportHTML(leadMagnet: LeadMagnet, addWatermark: boolean): stri
  * iOS-specific PDF export using server-side generation
  * Sends HTML to API, receives PDF, saves and shares via native iOS share sheet
  */
-async function exportToPDFiOS(leadMagnet: LeadMagnet, addWatermark: boolean): Promise<ExportResult> {
+async function exportToPDFiOS(leadMagnet: LeadMagnet): Promise<ExportResult> {
     try {
-        const html = generateExportHTML(leadMagnet, addWatermark);
+        const html = generateExportHTML(leadMagnet);
 
         // Use Inkfluence's PDF generation API
         const apiUrl = getApiUrl('/api/generate-pdf');
@@ -311,9 +283,9 @@ async function exportToPDFiOS(leadMagnet: LeadMagnet, addWatermark: boolean): Pr
 /**
  * Web PDF export using print dialog
  */
-async function exportToPDFWeb(leadMagnet: LeadMagnet, addWatermark: boolean): Promise<ExportResult> {
+async function exportToPDFWeb(leadMagnet: LeadMagnet): Promise<ExportResult> {
     try {
-        const html = generateExportHTML(leadMagnet, addWatermark);
+        const html = generateExportHTML(leadMagnet);
 
         // Open print window
         const printWindow = window.open('', '_blank');
@@ -343,19 +315,19 @@ async function exportToPDFWeb(leadMagnet: LeadMagnet, addWatermark: boolean): Pr
 /**
  * Export as PDF - routes to iOS or Web implementation
  */
-async function exportAsPDF(leadMagnet: LeadMagnet, addWatermark: boolean): Promise<ExportResult> {
+async function exportAsPDF(leadMagnet: LeadMagnet): Promise<ExportResult> {
     if (isIOSNative()) {
-        return exportToPDFiOS(leadMagnet, addWatermark);
+        return exportToPDFiOS(leadMagnet);
     }
-    return exportToPDFWeb(leadMagnet, addWatermark);
+    return exportToPDFWeb(leadMagnet);
 }
 
 /**
  * Export as HTML file
  */
-async function exportAsHTML(leadMagnet: LeadMagnet, addWatermark: boolean): Promise<ExportResult> {
+async function exportAsHTML(leadMagnet: LeadMagnet): Promise<ExportResult> {
     try {
-        const html = generateExportHTML(leadMagnet, addWatermark);
+        const html = generateExportHTML(leadMagnet);
         const blob = new Blob([html], { type: 'text/html' });
         const filename = `${leadMagnet.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.html`;
 
@@ -380,13 +352,11 @@ export async function exportLeadMagnet(options: ExportOptions): Promise<ExportRe
         };
     }
 
-    const addWatermark = shouldAddWatermark(userPlan);
-
     switch (format) {
         case 'pdf':
-            return exportAsPDF(leadMagnet, addWatermark);
+            return exportAsPDF(leadMagnet);
         case 'html':
-            return exportAsHTML(leadMagnet, addWatermark);
+            return exportAsHTML(leadMagnet);
         default:
             return { success: false, error: 'Unknown export format' };
     }

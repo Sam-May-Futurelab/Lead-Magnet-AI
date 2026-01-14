@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { type User } from 'firebase/auth';
 import { onAuthChange, getOrCreateUserProfile, signOut as firebaseSignOut } from '@/lib/firebase';
+import { useLeadMagnetStore } from '@/stores/lead-magnet-store';
 import type { UserProfile } from '@/lib/types';
 
 interface AuthContextType {
@@ -54,6 +55,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // Clear local lead magnets to prevent data leakage between users
+    useLeadMagnetStore.getState().reset();
+    // Clear the persisted storage as well
+    try {
+      localStorage.removeItem('lead-magnet-storage');
+    } catch (e) {
+      console.log('Could not clear lead magnet storage:', e);
+    }
     await firebaseSignOut();
     setUser(null);
     setUserProfile(null);

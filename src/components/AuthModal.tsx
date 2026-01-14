@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkle, GoogleLogo, AppleLogo } from '@phosphor-icons/react';
+import { GoogleLogo, AppleLogo } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { signInWithGoogle, signInWithApple } from '@/lib/firebase';
@@ -46,7 +46,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="text-center">
           <div className="mx-auto mb-4 w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
-            <Sparkle size={32} className="text-white" weight="fill" />
+            <img src="/app-icon.png" alt="Lead Magnet AI" className="w-10 h-10" />
           </div>
           <DialogTitle className="text-2xl">Welcome to Lead Magnet AI</DialogTitle>
           <DialogDescription className="text-base">

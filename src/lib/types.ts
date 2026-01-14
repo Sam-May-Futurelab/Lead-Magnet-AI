@@ -3,9 +3,9 @@
 // ============================================
 
 /**
- * Lead Magnet Type - Simplified to checklist only
+ * Lead Magnet Type
  */
-export type LeadMagnetType = 'checklist';
+export type LeadMagnetType = 'checklist' | 'cheatsheet' | 'guide' | 'template' | 'swipefile' | 'resourcelist' | 'worksheet';
 
 /**
  * Generation tone options
@@ -147,10 +147,7 @@ export interface UsageLimits {
   maxLeadMagnets: number;
   exportFormats: ('pdf' | 'html')[];
   premiumTemplates: boolean;
-  customBranding: boolean;
-  removeWatermark: boolean;
   priorityGeneration: boolean;
-  whiteLabel: boolean;
 }
 
 export const PLAN_LIMITS: Record<UserProfile['plan'], UsageLimits> = {
@@ -158,28 +155,19 @@ export const PLAN_LIMITS: Record<UserProfile['plan'], UsageLimits> = {
     maxLeadMagnets: 1,
     exportFormats: ['pdf'],
     premiumTemplates: false,
-    customBranding: false,
-    removeWatermark: false,
     priorityGeneration: false,
-    whiteLabel: false,
   },
   pro: {
     maxLeadMagnets: 10,
     exportFormats: ['pdf', 'html'],
     premiumTemplates: true,
-    customBranding: true,
-    removeWatermark: true,
     priorityGeneration: false,
-    whiteLabel: false,
   },
   unlimited: {
     maxLeadMagnets: -1, // Unlimited
     exportFormats: ['pdf', 'html'],
     premiumTemplates: true,
-    customBranding: true,
-    removeWatermark: true,
     priorityGeneration: true,
-    whiteLabel: true,
   },
 };
 

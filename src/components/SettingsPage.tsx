@@ -1,20 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
-    User,
     Crown,
     Shield,
     FileText,
     SignOut,
     CaretRight,
     Envelope,
-    Star,
     Trash,
-    PaintBrush,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
     Dialog,
@@ -25,8 +20,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
-import { signOut } from '@/lib/firebase';
-import { PLAN_LIMITS } from '@/lib/types';
+import { signOut, deleteUserAccount } from '@/lib/firebase';
 import { triggerImpactHaptic, triggerNotificationHaptic } from '@/lib/haptics';
 
 interface SettingItem {
@@ -49,9 +43,9 @@ export function SettingsPage() {
     const { user, userProfile } = useAuth();
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const plan = userProfile?.plan || 'free';
-    const limits = PLAN_LIMITS[plan];
 
     const handleSignOut = async () => {
         triggerImpactHaptic('medium');
@@ -66,10 +60,29 @@ export function SettingsPage() {
     };
 
     const handleDeleteAccount = async () => {
+        if (!user) return;
+
+        setIsDeleting(true);
         triggerImpactHaptic('heavy');
-        // TODO: Implement account deletion
-        alert('Account deletion coming soon. Please contact support.');
-        setShowDeleteDialog(false);
+
+        try {
+            await deleteUserAccount(user.uid);
+            triggerNotificationHaptic('success');
+            navigate('/');
+        } catch (error: any) {
+            console.error('Account deletion error:', error);
+            triggerNotificationHaptic('error');
+
+            // Firebase requires recent authentication for account deletion
+            if (error?.code === 'auth/requires-recent-login') {
+                alert('For security, please sign out and sign back in before deleting your account.');
+            } else {
+                alert('Failed to delete account. Please contact support at hello@inkfluenceai.com');
+            }
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteDialog(false);
+        }
     };
 
     const openURL = (url: string) => {
@@ -81,7 +94,7 @@ export function SettingsPage() {
             title: 'Account',
             items: [
                 {
-                    icon: <FileText size={22} className="text-primary" />,
+                    icon: <FileText size={18} className="text-muted-foreground" />,
                     label: 'My Lead Magnets',
                     description: 'View all your creations',
                     action: () => {
@@ -90,7 +103,7 @@ export function SettingsPage() {
                     },
                 },
                 {
-                    icon: <Crown size={22} weight="fill" className="text-amber-500" />,
+                    icon: <Crown size={18} weight="fill" className="text-amber-500" />,
                     label: 'Subscription',
                     description: plan === 'free' ? 'Free Plan' : plan === 'pro' ? 'Pro Plan' : 'Unlimited',
                     badge: plan !== 'free' ? 'Active' : undefined,
@@ -99,49 +112,25 @@ export function SettingsPage() {
                         navigate('/paywall');
                     },
                 },
-                {
-                    icon: <PaintBrush size={22} />,
-                    label: 'Default Style',
-                    description: 'Colors and fonts',
-                    action: () => {
-                        triggerImpactHaptic('light');
-                        // TODO: Navigate to style settings
-                        alert('Style customization coming soon!');
-                    },
-                },
             ],
         },
         {
             title: 'Support',
             items: [
                 {
-                    icon: <Envelope size={22} />,
+                    icon: <Envelope size={18} className="text-muted-foreground" />,
                     label: 'Contact Support',
-                    description: 'hello@inkfluenceai.com',
-                    action: () => {
-                        triggerImpactHaptic('light');
-                        openURL('mailto:hello@inkfluenceai.com');
-                    },
+                    description: 'Get help with any issues',
+                    action: () => openURL('mailto:hello@inkfluenceai.com'),
                     external: true,
                 },
-                {
-                    icon: <Star size={22} className="text-amber-500" />,
-                    label: 'Rate the App',
-                    description: 'Help us improve',
-                    action: () => {
-                        triggerImpactHaptic('light');
-                        // TODO: Implement App Store rating
-                        openURL('https://apps.apple.com/app/id123456789');
-                    },
-                    external: true,
-                },
-            ],
+            ]
         },
         {
             title: 'Legal',
             items: [
                 {
-                    icon: <Shield size={22} />,
+                    icon: <Shield size={18} className="text-muted-foreground" />,
                     label: 'Privacy Policy',
                     action: () => {
                         triggerImpactHaptic('light');
@@ -149,7 +138,7 @@ export function SettingsPage() {
                     },
                 },
                 {
-                    icon: <FileText size={22} />,
+                    icon: <FileText size={18} className="text-muted-foreground" />,
                     label: 'Terms of Service',
                     action: () => {
                         triggerImpactHaptic('light');
@@ -162,21 +151,16 @@ export function SettingsPage() {
             title: 'Danger Zone',
             items: [
                 {
-                    icon: <SignOut size={22} />,
+                    icon: <SignOut size={18} className="text-destructive" />,
                     label: 'Sign Out',
-                    action: () => {
-                        triggerImpactHaptic('light');
-                        setShowSignOutDialog(true);
-                    },
+                    action: () => setShowSignOutDialog(true),
+                    destructive: true,
                 },
                 {
-                    icon: <Trash size={22} className="text-red-500" />,
+                    icon: <Trash size={18} className="text-destructive" />,
                     label: 'Delete Account',
-                    description: 'Permanently delete all data',
-                    action: () => {
-                        triggerImpactHaptic('medium');
-                        setShowDeleteDialog(true);
-                    },
+                    description: 'Permanently remove all data',
+                    action: () => setShowDeleteDialog(true),
                     destructive: true,
                 },
             ],
@@ -184,83 +168,41 @@ export function SettingsPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 py-8 px-4">
-            <div className="max-w-2xl mx-auto">
-                {/* Profile Card */}
-                <Card className="mb-6">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-4">
-                            {user?.photoURL ? (
-                                <img
-                                    src={user.photoURL}
-                                    alt={user.displayName || 'Profile'}
-                                    className="w-16 h-16 rounded-full"
-                                />
-                            ) : (
-                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                                    <User size={32} className="text-primary" />
-                                </div>
-                            )}
-                            <div className="flex-1">
-                                <h2 className="text-xl font-semibold">
-                                    {user?.displayName || 'User'}
-                                </h2>
-                                <p className="text-sm text-muted-foreground">{user?.email}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant={plan === 'free' ? 'secondary' : 'default'}>
-                                        {plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Unlimited'}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground">
-                                        {userProfile?.leadMagnetsCreated || 0}{' '}
-                                        {limits.maxLeadMagnets === -1
-                                            ? 'lead magnets'
-                                            : `/ ${limits.maxLeadMagnets} lead magnets`}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+        <div className="min-h-screen py-8 px-4 sm:px-6">
+            <div className="max-w-2xl mx-auto space-y-8">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+                    <p className="text-muted-foreground">
+                        Manage your account and preferences
+                    </p>
+                </div>
 
-                        {plan === 'free' && (
-                            <Button
-                                className="w-full mt-4 bg-gradient-to-r from-purple-500 to-pink-500"
-                                onClick={() => navigate('/paywall')}
-                            >
-                                <Crown size={18} weight="fill" className="mr-2" />
-                                Upgrade to Pro
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Settings Sections */}
-                {sections.map((section, sectionIndex) => (
-                    <motion.div
-                        key={section.title}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: sectionIndex * 0.05 }}
-                        className="mb-6"
-                    >
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2 px-1">
-                            {section.title}
-                        </h3>
-                        <Card>
-                            <CardContent className="p-0">
+                <div className="space-y-8">
+                    {sections.map((section, index) => (
+                        <div key={index} className="space-y-3">
+                            <h2 className="text-sm font-medium text-muted-foreground ml-1 uppercase tracking-wider">
+                                {section.title}
+                            </h2>
+                            <div className="bg-card rounded-xl border shadow-sm divide-y">
                                 {section.items.map((item, itemIndex) => (
                                     <button
-                                        key={item.label}
+                                        key={itemIndex}
                                         onClick={item.action}
-                                        className={`w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors text-left ${itemIndex !== section.items.length - 1
-                                            ? 'border-b border-border'
-                                            : ''
-                                            } ${item.destructive ? 'text-red-500' : ''}`}
+                                        className={`w-full flex items-center gap-4 p-4 text-left transition-colors hover:bg-muted/50 ${item.destructive ? 'hover:bg-destructive/5' : ''
+                                            } first:rounded-t-xl last:rounded-b-xl`}
                                     >
-                                        <div className="flex-shrink-0">{item.icon}</div>
+                                        <div className={`p-2 rounded-md bg-muted/50 ${item.destructive ? 'bg-destructive/10' : ''
+                                            }`}>
+                                            {item.icon}
+                                        </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium">{item.label}</span>
+                                                <span className={`font-medium ${item.destructive ? 'text-destructive' : 'text-foreground'
+                                                    }`}>
+                                                    {item.label}
+                                                </span>
                                                 {item.badge && (
-                                                    <Badge variant="outline" className="text-xs">
+                                                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
                                                         {item.badge}
                                                     </Badge>
                                                 )}
@@ -271,57 +213,49 @@ export function SettingsPage() {
                                                 </p>
                                             )}
                                         </div>
-                                        <CaretRight
-                                            size={18}
-                                            className="text-muted-foreground flex-shrink-0"
-                                        />
+                                        <CaretRight size={16} className="text-muted-foreground/50" />
                                     </button>
                                 ))}
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                ))}
-
-                {/* App Info */}
-                <div className="text-center text-sm text-muted-foreground mt-8">
-                    <p>LeadMagnet AI v1.0.0</p>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {/* Sign Out Dialog */}
+            {/* Dialogs remain same, just updated trigger locations */}
             <Dialog open={showSignOutDialog} onOpenChange={setShowSignOutDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Sign Out</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to sign out?
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader className="text-center sm:text-center">
+                        <DialogTitle className="text-xl">Sign Out</DialogTitle>
+                        <DialogDescription className="pt-2">
+                            Are you sure you want to sign out of your account?
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="gap-2">
-                        <Button variant="outline" onClick={() => setShowSignOutDialog(false)}>
+                    <DialogFooter className="flex-col gap-2 sm:flex-col pt-4">
+                        <Button variant="destructive" className="w-full" onClick={handleSignOut}>
+                            Sign Out
+                        </Button>
+                        <Button variant="outline" className="w-full" onClick={() => setShowSignOutDialog(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSignOut}>Sign Out</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Account Dialog */}
-            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="text-red-500">Delete Account</DialogTitle>
-                        <DialogDescription>
-                            This action cannot be undone. All your lead magnets and data will
-                            be permanently deleted.
+            <Dialog open={showDeleteDialog} onOpenChange={(open) => !isDeleting && setShowDeleteDialog(open)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader className="text-center sm:text-center">
+                        <DialogTitle className="text-xl">Delete Account</DialogTitle>
+                        <DialogDescription className="pt-2">
+                            This action cannot be undone. This will permanently delete your account and remove your data from our servers.
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="gap-2">
-                        <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-                            Cancel
+                    <DialogFooter className="flex-col gap-2 sm:flex-col pt-4">
+                        <Button variant="destructive" className="w-full" onClick={handleDeleteAccount} disabled={isDeleting}>
+                            {isDeleting ? 'Deleting...' : 'Delete Account'}
                         </Button>
-                        <Button variant="destructive" onClick={handleDeleteAccount}>
-                            Delete Account
+                        <Button variant="outline" className="w-full" onClick={() => setShowDeleteDialog(false)} disabled={isDeleting}>
+                            Cancel
                         </Button>
                     </DialogFooter>
                 </DialogContent>
