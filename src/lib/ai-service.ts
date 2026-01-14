@@ -1,32 +1,232 @@
-import { getApiUrl } from './utils';
+import { getApiUrl } from './api';
 import type { GenerationRequest, GenerationResponse, LeadMagnetType, Tone, Length } from './types';
 import { LEAD_MAGNET_TYPES } from './templates';
 
 /**
- * Generate lead magnet content via API
+ * Format AI-generated content (markdown) into proper HTML
+ * Based on Inkfluence's formatGeneratedContent function
+ */
+function formatContentToHtml(text: string): string {
+  if (!text || !text.trim()) return '';
+
+  let formatted = text.trim();
+
+  // Remove em dashes - replace with regular hyphens
+  formatted = formatted.replace(/\u2014/g, ' - ');
+  formatted = formatted.replace(/&mdash;/g, ' - ');
+  formatted = formatted.replace(/&#8212;/g, ' - ');
+
+  // Handle fenced code blocks first
+  formatted = formatted.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
+    const escaped = code.trim()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const langClass = lang ? ` class="language-${lang}"` : '';
+    return `<pre><code${langClass}>${escaped}</code></pre>`;
+  });
+
+  // Handle inline code
+  formatted = formatted.replace(/`([^`]+)`/g, (_match, code) => {
+    const escaped = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return `<code>${escaped}</code>`;
+  });
+
+  // Convert markdown headings (process from most specific to least)
+  formatted = formatted.replace(/^######\s*(.+)$/gm, '<h6>$1</h6>');
+  formatted = formatted.replace(/^#####\s*(.+)$/gm, '<h5>$1</h5>');
+  formatted = formatted.replace(/^####\s*(.+)$/gm, '<h4>$1</h4>');
+  formatted = formatted.replace(/^###\s*(.+)$/gm, '<h3>$1</h3>');
+  formatted = formatted.replace(/^##\s*(.+)$/gm, '<h2>$1</h2>');
+  formatted = formatted.replace(/^#\s*(.+)$/gm, '<h1>$1</h1>');
+
+  // Bold
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Italic
+  formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Links
+  formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  // Blockquotes
+  formatted = formatted.replace(/^>\s*(.+)$/gm, '<blockquote><p>$1</p></blockquote>');
+  // Merge consecutive blockquotes
+  formatted = formatted.replace(/<\/blockquote>\s*<blockquote>/g, '');
+
+  // Unordered lists
+  const ulMatches = formatted.match(/^[-*]\s+.+$/gm);
+  if (ulMatches) {
+    formatted = formatted.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
+    // Wrap consecutive li elements in ul
+    formatted = formatted.replace(/(<li>.*?<\/li>\n?)+/gs, (match) => `<ul>${match}</ul>`);
+  }
+
+  // Ordered lists
+  const olMatches = formatted.match(/^\d+\.\s+.+$/gm);
+  if (olMatches) {
+    formatted = formatted.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+  }
+
+  // Horizontal rules
+  formatted = formatted.replace(/^---+$/gm, '<hr />');
+
+  // Tables (basic markdown tables)
+  if (formatted.includes('|')) {
+    const lines = formatted.split('\n');
+    let inTable = false;
+    let tableHtml = '';
+    const result: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        if (trimmed.includes('---')) {
+          // Header separator row - skip but mark we're in table
+          continue;
+        }
+        if (!inTable) {
+          inTable = true;
+          tableHtml = '<table><thead><tr>';
+          const cells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+          tableHtml += cells.map(c => `<th>${c}</th>`).join('');
+          tableHtml += '</tr></thead><tbody>';
+        } else {
+          const cells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+          tableHtml += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+        }
+      } else {
+        if (inTable) {
+          tableHtml += '</tbody></table>';
+          result.push(tableHtml);
+          tableHtml = '';
+          inTable = false;
+        }
+        result.push(line);
+      }
+    }
+    if (inTable) {
+      tableHtml += '</tbody></table>';
+      result.push(tableHtml);
+    }
+    formatted = result.join('\n');
+  }
+
+  // Convert remaining paragraphs (double newlines)
+  formatted = formatted.split(/\n\n+/).map(para => {
+    para = para.trim();
+    if (!para) return '';
+    // Skip if already wrapped in HTML tags
+    if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol') ||
+      para.startsWith('<blockquote') || para.startsWith('<pre') || para.startsWith('<table') ||
+      para.startsWith('<hr')) {
+      return para;
+    }
+    // Handle single line breaks within paragraphs
+    para = para.replace(/\n/g, '<br />');
+    return `<p>${para}</p>`;
+  }).join('\n');
+
+  // Clean up empty paragraphs
+  formatted = formatted.replace(/<p>\s*<\/p>/g, '');
+  formatted = formatted.replace(/<p><br \/><\/p>/g, '');
+
+  return formatted.trim();
+}
+
+/**
+ * Generate lead magnet content via dedicated Lead Magnet API
+ * Uses the new /api/lead-magnet endpoint on Inkfluence backend
  */
 export async function generateLeadMagnetContent(
   request: GenerationRequest
 ): Promise<GenerationResponse> {
-  const endpoint = getApiUrl('/api/generate');
+  // Use the dedicated lead magnet endpoint
+  const endpoint = getApiUrl('/api/lead-magnet');
+
+  console.log('[AI Service] Generating lead magnet via:', endpoint);
 
   try {
+    // Build the request in the format the new lead-magnet API expects
+    const requestBody = {
+      userId: request.userId || 'lead-magnet-guest',
+      topic: `${request.title}: ${request.prompt}`,
+      targetAudience: request.targetAudience || 'general audience',
+      tone: mapTone(request.tone),
+      format: request.type || 'checklist',
+    };
+
+    console.log('[AI Service] Request body:', JSON.stringify(requestBody, null, 2));
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('[AI Service] Response status:', response.status);
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Generation failed');
+      let errorMessage = 'Generation failed';
+      try {
+        const error = await response.json();
+        console.error('[AI Service] Error response:', JSON.stringify(error));
+        // Check error.error first (API returns {error: "message"}), then error.message
+        errorMessage = error.error || error.message || errorMessage;
+
+        // Add status code context for rate limiting
+        if (response.status === 429) {
+          errorMessage = 'AI generation limit reached. Please try again tomorrow or upgrade your plan.';
+        }
+      } catch {
+        errorMessage = `Generation failed with status ${response.status}`;
+      }
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('[AI Service] Got response data:', data.success);
+
+    // Get the raw content and format it to HTML
+    const rawContent = data.content || data.html || data.result || '';
+    const htmlContent = formatContentToHtml(rawContent);
+
+    // Map the response to our expected format
+    return {
+      success: true,
+      content: htmlContent,
+      rawContent: rawContent,
+      wordCount: data.wordCount || countWords(rawContent),
+      itemCount: data.itemCount,
+    };
   } catch (error) {
-    console.error('Generation error:', error);
+    console.error('[AI Service] Generation error:', error);
     throw error;
   }
+}
+
+/**
+ * Map our tone values to the API's expected tones
+ */
+function mapTone(tone: Tone): string {
+  const toneMap: Record<Tone, string> = {
+    professional: 'professional',
+    friendly: 'friendly',
+    educational: 'educational',
+    persuasive: 'persuasive',
+  };
+  return toneMap[tone] || 'friendly';
+}
+
+/**
+ * Count words in HTML content
+ */
+function countWords(html: string): number {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text ? text.split(' ').length : 0;
 }
 
 /**
@@ -34,7 +234,7 @@ export async function generateLeadMagnetContent(
  */
 export function buildSystemPrompt(type: LeadMagnetType, tone: Tone): string {
   const typeInfo = LEAD_MAGNET_TYPES[type];
-  
+
   const toneInstructions = {
     professional: 'Use a polished, authoritative tone. Sound confident and expert.',
     friendly: 'Use a warm, conversational tone. Be approachable and relatable.',
@@ -86,7 +286,7 @@ TARGET LENGTH: ${lengthGuide[request.length]}`;
     prompt += `\n\nNICHE/INDUSTRY: ${request.niche}`;
   }
 
-  if (request.itemCount && (request.type === 'checklist' || request.type === 'resourcelist')) {
+  if (request.itemCount && (request.type === 'checklist' || request.type === 'toolkit')) {
     prompt += `\n\nNUMBER OF ITEMS: ${request.itemCount}`;
   }
 

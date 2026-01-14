@@ -6,18 +6,6 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Get API URL - handles iOS vs web routing
- */
-export function getApiUrl(path: string): string {
-  // In production iOS app, use the deployed API
-  if (typeof window !== 'undefined' && window.location.protocol === 'capacitor:') {
-    return `${import.meta.env.VITE_API_URL}${path}`;
-  }
-  // In development or web, use relative path
-  return path;
-}
-
-/**
  * Format date for display
  */
 export function formatDate(date: Date | string): string {
@@ -59,8 +47,8 @@ export function truncate(str: string, length: number): string {
  * Generate a unique ID
  */
 export function generateId(): string {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
+  return Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
 }
 
 /**

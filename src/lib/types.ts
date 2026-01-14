@@ -3,16 +3,9 @@
 // ============================================
 
 /**
- * Lead Magnet Types - The different formats users can create
+ * Lead Magnet Type - Simplified to checklist only
  */
-export type LeadMagnetType = 
-  | 'checklist'      // Step-by-step actionable list
-  | 'cheatsheet'     // Quick reference guide
-  | 'guide'          // Short educational guide
-  | 'template'       // Fill-in-the-blank template
-  | 'swipefile'      // Copy/paste examples
-  | 'resourcelist'   // Curated list of tools/resources
-  | 'worksheet';     // Interactive worksheet
+export type LeadMagnetType = 'checklist';
 
 /**
  * Generation tone options
@@ -36,7 +29,7 @@ export type LeadMagnetStatus = 'draft' | 'generating' | 'complete' | 'error';
 export interface LeadMagnet {
   id: string;
   userId: string;
-  
+
   // Content
   title: string;
   subtitle?: string;
@@ -44,20 +37,20 @@ export interface LeadMagnet {
   type: LeadMagnetType;
   content: string;           // Generated HTML content
   rawContent?: string;       // Plain text version
-  
+
   // Targeting
   targetAudience?: string;
   problemSolved?: string;
   niche?: string;
-  
+
   // Generation settings
   tone: Tone;
   length: Length;
   prompt?: string;           // Original user prompt
-  
+
   // Design
   design: LeadMagnetDesign;
-  
+
   // Metadata
   status: LeadMagnetStatus;
   wordCount: number;
@@ -65,7 +58,7 @@ export interface LeadMagnet {
   createdAt: Date;
   updatedAt: Date;
   generatedAt?: Date;
-  
+
   // Export tracking
   exportedFormats?: ('pdf' | 'png' | 'html')[];
   downloadCount: number;
@@ -80,16 +73,16 @@ export interface LeadMagnetDesign {
   secondaryColor: string;
   backgroundColor: string;
   textColor: string;
-  
+
   // Typography
   fontFamily: string;
   titleSize: 'small' | 'medium' | 'large';
-  
+
   // Layout
   template: string;          // Template ID
   showLogo: boolean;
   logoUrl?: string;
-  
+
   // Branding
   companyName?: string;
   websiteUrl?: string;
@@ -107,15 +100,15 @@ export interface LeadMagnetTemplate {
   type: LeadMagnetType;
   category: string;
   thumbnail: string;
-  
+
   // Pre-filled content
   defaultTitle: string;
   defaultPrompt: string;
   exampleContent: string;
-  
+
   // Design defaults
   defaultDesign: Partial<LeadMagnetDesign>;
-  
+
   // Metadata
   popular: boolean;
   isPremium: boolean;
@@ -129,21 +122,20 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   photoURL?: string;
-  
+
   // Subscription
-  plan: 'free' | 'pro' | 'premium';
-  subscriptionStatus?: 'active' | 'cancelled' | 'expired';
+  plan: 'free' | 'pro' | 'unlimited';
+  subscriptionStatus?: 'active' | 'cancelled' | 'expired' | 'lifetime';
   subscriptionEndDate?: Date;
-  
+  purchaseDate?: Date;
+
   // Usage
   leadMagnetsCreated: number;
-  dailyGenerationsUsed: number;
-  lastGenerationDate?: string;
-  
+
   // Preferences
   defaultTone?: Tone;
   defaultDesign?: Partial<LeadMagnetDesign>;
-  
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -152,38 +144,42 @@ export interface UserProfile {
  * Usage Limits by Plan
  */
 export interface UsageLimits {
-  dailyGenerations: number;
   maxLeadMagnets: number;
-  exportFormats: ('pdf' | 'png' | 'html')[];
+  exportFormats: ('pdf' | 'html')[];
   premiumTemplates: boolean;
   customBranding: boolean;
   removeWatermark: boolean;
+  priorityGeneration: boolean;
+  whiteLabel: boolean;
 }
 
 export const PLAN_LIMITS: Record<UserProfile['plan'], UsageLimits> = {
   free: {
-    dailyGenerations: 3,
-    maxLeadMagnets: 5,
+    maxLeadMagnets: 1,
     exportFormats: ['pdf'],
     premiumTemplates: false,
     customBranding: false,
     removeWatermark: false,
+    priorityGeneration: false,
+    whiteLabel: false,
   },
   pro: {
-    dailyGenerations: 15,
-    maxLeadMagnets: 50,
-    exportFormats: ['pdf', 'png'],
+    maxLeadMagnets: 10,
+    exportFormats: ['pdf', 'html'],
     premiumTemplates: true,
     customBranding: true,
     removeWatermark: true,
+    priorityGeneration: false,
+    whiteLabel: false,
   },
-  premium: {
-    dailyGenerations: 50,
+  unlimited: {
     maxLeadMagnets: -1, // Unlimited
-    exportFormats: ['pdf', 'png', 'html'],
+    exportFormats: ['pdf', 'html'],
     premiumTemplates: true,
     customBranding: true,
     removeWatermark: true,
+    priorityGeneration: true,
+    whiteLabel: true,
   },
 };
 
@@ -199,6 +195,7 @@ export interface GenerationRequest {
   tone: Tone;
   length: Length;
   itemCount?: number;        // For checklists
+  userId?: string;           // For rate limiting
 }
 
 /**

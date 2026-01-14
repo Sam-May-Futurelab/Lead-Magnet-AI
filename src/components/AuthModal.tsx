@@ -3,7 +3,6 @@ import { Sparkle, GoogleLogo, AppleLogo } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { signInWithGoogle, signInWithApple } from '@/lib/firebase';
-import { toast } from 'sonner';
 import { triggerImpactHaptic } from '@/lib/haptics';
 
 interface AuthModalProps {
@@ -20,11 +19,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     try {
       await signInWithGoogle();
-      toast.success('Welcome to Lead Magnet AI!');
       onOpenChange(false);
     } catch (error) {
       console.error('Sign in error:', error);
-      toast.error('Sign in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -36,11 +33,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     try {
       await signInWithApple();
-      toast.success('Welcome to Lead Magnet AI!');
       onOpenChange(false);
     } catch (error) {
       console.error('Sign in error:', error);
-      toast.error('Sign in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

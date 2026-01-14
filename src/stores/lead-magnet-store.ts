@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { LeadMagnet } from '@/lib/types';
 
 interface LeadMagnetState {
@@ -10,7 +11,7 @@ interface LeadMagnetState {
   generationProgress: number;
   generationMessage: string;
 
-  // User's lead magnets
+  // User's lead magnets (persisted locally)
   leadMagnets: LeadMagnet[];
   isLoading: boolean;
 
@@ -34,35 +35,45 @@ const initialState = {
   isLoading: false,
 };
 
-export const useLeadMagnetStore = create<LeadMagnetState>((set, get) => ({
-  ...initialState,
+export const useLeadMagnetStore = create<LeadMagnetState>()(
+  persist(
+    (set, get) => ({
+      ...initialState,
 
-  setCurrent: (leadMagnet) => set({ current: leadMagnet }),
+      setCurrent: (leadMagnet) => set({ current: leadMagnet }),
 
-  updateCurrent: (updates) => set((state) => ({
-    current: state.current ? { ...state.current, ...updates } : updates,
-  })),
+      updateCurrent: (updates) => set((state) => ({
+        current: state.current ? { ...state.current, ...updates } : updates,
+      })),
 
-  setGenerating: (isGenerating, message = '') => set({
-    isGenerating,
-    generationMessage: message,
-    generationProgress: isGenerating ? 0 : get().generationProgress,
-  }),
+      setGenerating: (isGenerating, message = '') => set({
+        isGenerating,
+        generationMessage: message,
+        generationProgress: isGenerating ? 0 : get().generationProgress,
+      }),
 
-  setProgress: (progress) => set({ generationProgress: progress }),
+      setProgress: (progress) => set({ generationProgress: progress }),
 
-  setLeadMagnets: (leadMagnets) => set({ leadMagnets, isLoading: false }),
+      setLeadMagnets: (leadMagnets) => set({ leadMagnets, isLoading: false }),
 
-  addLeadMagnet: (leadMagnet) => set((state) => ({
-    leadMagnets: [leadMagnet, ...state.leadMagnets],
-  })),
+      addLeadMagnet: (leadMagnet) => set((state) => ({
+        leadMagnets: [leadMagnet, ...state.leadMagnets],
+      })),
 
-  removeLeadMagnet: (id) => set((state) => ({
-    leadMagnets: state.leadMagnets.filter((lm) => lm.id !== id),
-  })),
+      removeLeadMagnet: (id) => set((state) => ({
+        leadMagnets: state.leadMagnets.filter((lm) => lm.id !== id),
+      })),
 
-  reset: () => set(initialState),
-}));
+      reset: () => set(initialState),
+    }),
+    {
+      name: 'lead-magnet-storage',
+      partialize: (state) => ({
+        leadMagnets: state.leadMagnets,
+      }),
+    }
+  )
+);
 
 // Selector hooks for specific parts of state
 export const useCurrentLeadMagnet = () => useLeadMagnetStore((s) => s.current);

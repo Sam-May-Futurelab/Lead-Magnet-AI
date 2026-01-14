@@ -19,7 +19,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('[Auth] AuthProvider: Setting up auth listener...');
+
+    // Timeout fallback - if auth doesn't respond in 3 seconds, stop loading
+    const timeout = setTimeout(() => {
+      console.log('[Auth] AuthProvider: Timeout - setting loading to false');
+      setLoading(false);
+    }, 3000);
+
     const unsubscribe = onAuthChange(async (firebaseUser) => {
+      clearTimeout(timeout);
+      console.log('[Auth] AuthProvider: Auth callback received', firebaseUser?.email || 'no user');
       setUser(firebaseUser);
 
       if (firebaseUser) {
@@ -33,10 +43,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserProfile(null);
       }
 
+      console.log('[Auth] AuthProvider: Setting loading to false');
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  Plus, 
-  Trash, 
-  Download, 
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Plus,
+  Trash,
+  Download,
   Eye,
   Sparkle,
-  FolderOpen
+  FolderOpen,
+  X,
+  Warning,
+  CircleNotch
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,11 +18,10 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { useLeadMagnetStore } from '@/stores/lead-magnet-store';
 import { getUserLeadMagnets, deleteLeadMagnet } from '@/lib/firebase';
-import { LEAD_MAGNET_TYPES } from '@/lib/templates';
+import { exportLeadMagnet, shareExport } from '@/lib/export-service';
 import { PLAN_LIMITS } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/utils';
 import type { LeadMagnet } from '@/lib/types';
-import { toast } from 'sonner';
 import { triggerImpactHaptic, triggerNotificationHaptic } from '@/lib/haptics';
 
 export function DashboardPage() {
@@ -28,44 +30,95 @@ export function DashboardPage() {
   const { leadMagnets, setLeadMagnets, removeLeadMagnet } = useLeadMagnetStore();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMagnet, setSelectedMagnet] = useState<LeadMagnet | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<LeadMagnet | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadLeadMagnets = async () => {
-      if (!user) return;
-      
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const magnets = await getUserLeadMagnets(user.uid);
-        setLeadMagnets(magnets);
+        const firestoreMagnets = await getUserLeadMagnets(user.uid);
+        // Merge Firestore data with local store (local takes priority for same IDs)
+        const localMagnets = leadMagnets.filter(m => m.id.startsWith('local-'));
+        const mergedMagnets = [...firestoreMagnets, ...localMagnets];
+        setLeadMagnets(mergedMagnets);
       } catch (error) {
-        console.error('Error loading lead magnets:', error);
-        toast.error('Failed to load your lead magnets');
+        console.error('Error loading lead magnets from Firestore:', error);
+        // Keep using local store data (already persisted)
+        console.log('Using locally stored lead magnets instead');
       } finally {
         setIsLoading(false);
       }
     };
 
     loadLeadMagnets();
-  }, [user, setLeadMagnets]);
+  }, [user]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (magnet: LeadMagnet) => {
+    setDeleteConfirm(magnet);
     triggerImpactHaptic('medium');
-    
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+
+    setIsDeleting(true);
+    triggerImpactHaptic('heavy');
+
     try {
-      await deleteLeadMagnet(id);
-      removeLeadMagnet(id);
-      triggerNotificationHaptic('success');
-      toast.success('Lead magnet deleted');
+      // Try to delete from Firestore (may fail due to permissions)
+      await deleteLeadMagnet(deleteConfirm.id);
     } catch (error) {
-      console.error('Delete error:', error);
+      // Firestore delete failed - that's OK, we'll still remove from local state
+      console.log('Firestore delete skipped (using local storage):', error);
+    }
+
+    // Always remove from local state (persisted to localStorage)
+    removeLeadMagnet(deleteConfirm.id);
+    triggerNotificationHaptic('success');
+    setDeleteConfirm(null);
+    setIsDeleting(false);
+  };
+
+  const handleExportPDF = async (magnet: LeadMagnet) => {
+    const plan = userProfile?.plan || 'free';
+
+    setExportingId(magnet.id);
+    triggerImpactHaptic('medium');
+
+    try {
+      const result = await exportLeadMagnet({
+        format: 'pdf',
+        leadMagnet: magnet,
+        userPlan: plan,
+        contentElement: contentRef.current!,
+      });
+
+      if (result.success && result.blob && result.filename) {
+        await shareExport(result.blob, result.filename);
+        triggerNotificationHaptic('success');
+      } else {
+        throw new Error(result.error || 'Export failed');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
       triggerNotificationHaptic('error');
-      toast.error('Failed to delete');
+    } finally {
+      setExportingId(null);
     }
   };
 
   const limits = userProfile ? PLAN_LIMITS[userProfile.plan] : PLAN_LIMITS.free;
-  const usagePercent = userProfile 
-    ? (userProfile.dailyGenerationsUsed / limits.dailyGenerations) * 100 
-    : 0;
+  const leadMagnetCount = userProfile?.leadMagnetsCreated || leadMagnets.length;
+  const usagePercent = limits.maxLeadMagnets === -1
+    ? 0
+    : (leadMagnetCount / limits.maxLeadMagnets) * 100;
 
   if (isLoading) {
     return (
@@ -86,9 +139,9 @@ export function DashboardPage() {
               {leadMagnets.length} {leadMagnets.length === 1 ? 'magnet' : 'magnets'} created
             </p>
           </div>
-          
-          <Button 
-            variant="gradient" 
+
+          <Button
+            variant="gradient"
             onClick={() => {
               triggerImpactHaptic('medium');
               navigate('/create');
@@ -105,21 +158,21 @@ export function DashboardPage() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Daily Generations</p>
+                <p className="text-sm text-muted-foreground">Lead Magnets</p>
                 <p className="text-2xl font-bold">
-                  {userProfile?.dailyGenerationsUsed || 0} / {limits.dailyGenerations}
+                  {leadMagnetCount} / {limits.maxLeadMagnets === -1 ? '∞' : limits.maxLeadMagnets}
                 </p>
               </div>
               <div className="text-right">
                 <Badge variant={userProfile?.plan === 'free' ? 'secondary' : 'default'}>
-                  {userProfile?.plan.toUpperCase() || 'FREE'} Plan
+                  {userProfile?.plan?.toUpperCase() || 'FREE'} Plan
                 </Badge>
                 {userProfile?.plan === 'free' && (
-                  <Button 
-                    variant="link" 
-                    size="sm" 
+                  <Button
+                    variant="link"
+                    size="sm"
                     className="mt-1"
-                    onClick={() => toast.info('Upgrade coming soon!')}
+                    onClick={() => navigate('/paywall')}
                   >
                     Upgrade for more
                   </Button>
@@ -127,7 +180,7 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="mt-4 h-2 bg-secondary rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-primary transition-all"
                 style={{ width: `${Math.min(usagePercent, 100)}%` }}
               />
@@ -146,7 +199,7 @@ export function DashboardPage() {
               <p className="text-muted-foreground mb-6">
                 Create your first lead magnet to start growing your email list
               </p>
-              <Button 
+              <Button
                 variant="gradient"
                 onClick={() => navigate('/create')}
                 className="gap-2"
@@ -168,16 +221,13 @@ export function DashboardPage() {
                 <Card className="h-full hover:border-primary/50 transition-colors">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <Badge variant="secondary" className="text-xs">
-                        {LEAD_MAGNET_TYPES[magnet.type].icon} {LEAD_MAGNET_TYPES[magnet.type].label}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      <CardTitle className="text-lg line-clamp-2">
+                        {magnet.title}
+                      </CardTitle>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                         {formatRelativeTime(magnet.createdAt)}
                       </span>
                     </div>
-                    <CardTitle className="text-lg mt-2 line-clamp-2">
-                      {magnet.title}
-                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
@@ -189,10 +239,10 @@ export function DashboardPage() {
                         </>
                       )}
                     </div>
-                    
+
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         className="flex-1 gap-1"
                         onClick={() => {
@@ -203,23 +253,25 @@ export function DashboardPage() {
                         <Eye size={14} />
                         View
                       </Button>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         className="flex-1 gap-1"
-                        onClick={() => {
-                          triggerImpactHaptic('light');
-                          toast.info('PDF export coming soon!');
-                        }}
+                        disabled={exportingId === magnet.id}
+                        onClick={() => handleExportPDF(magnet)}
                       >
-                        <Download size={14} />
+                        {exportingId === magnet.id ? (
+                          <CircleNotch size={14} className="animate-spin" />
+                        ) : (
+                          <Download size={14} />
+                        )}
                         PDF
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(magnet.id)}
+                        onClick={() => handleDelete(magnet)}
                       >
                         <Trash size={14} />
                       </Button>
@@ -232,37 +284,197 @@ export function DashboardPage() {
         )}
 
         {/* Preview Modal */}
-        {selectedMagnet && (
-          <div 
-            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-            onClick={() => setSelectedMagnet(null)}
-          >
+        <AnimatePresence>
+          {selectedMagnet && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-background rounded-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+              onClick={() => setSelectedMagnet(null)}
             >
-              <div className="p-6 border-b flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold">{selectedMagnet.title}</h2>
-                  <Badge variant="secondary" className="mt-1">
-                    {LEAD_MAGNET_TYPES[selectedMagnet.type].label}
-                  </Badge>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-background rounded-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6 border-b flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold">{selectedMagnet.title}</h2>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={exportingId === selectedMagnet.id}
+                      onClick={() => handleExportPDF(selectedMagnet)}
+                    >
+                      {exportingId === selectedMagnet.id ? (
+                        <CircleNotch size={16} className="animate-spin mr-2" />
+                      ) : (
+                        <Download size={16} className="mr-2" />
+                      )}
+                      Export PDF
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedMagnet(null)}>
+                      <X size={20} />
+                    </Button>
+                  </div>
                 </div>
-                <Button variant="ghost" onClick={() => setSelectedMagnet(null)}>
-                  ✕
-                </Button>
-              </div>
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
-                <div 
-                  className="prose prose-sm max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{ __html: selectedMagnet.content }}
-                />
-              </div>
+                <div className="p-6 overflow-y-auto max-h-[60vh]">
+                  {/* Styled Content Preview */}
+                  <style>{`
+                    .preview-content {
+                      font-size: 1rem;
+                      line-height: 1.8;
+                      color: hsl(var(--foreground));
+                    }
+                    .preview-content h1 {
+                      font-size: 1.75em;
+                      font-weight: 700;
+                      color: hsl(var(--foreground));
+                      margin-top: 1.5em;
+                      margin-bottom: 0.75em;
+                      line-height: 1.3;
+                      border-bottom: 2px solid hsl(var(--primary) / 0.3);
+                      padding-bottom: 0.5em;
+                    }
+                    .preview-content h2 {
+                      font-size: 1.4em;
+                      font-weight: 700;
+                      color: hsl(var(--foreground));
+                      margin-top: 1.5em;
+                      margin-bottom: 0.75em;
+                      line-height: 1.3;
+                    }
+                    .preview-content h3 {
+                      font-size: 1.15em;
+                      font-weight: 600;
+                      color: hsl(var(--foreground));
+                      margin-top: 1.25em;
+                      margin-bottom: 0.5em;
+                    }
+                    .preview-content p {
+                      margin: 0 0 1em 0;
+                      color: hsl(var(--muted-foreground));
+                    }
+                    .preview-content ul,
+                    .preview-content ol {
+                      margin: 1em 0 1.5em 1.5em;
+                      padding-left: 0;
+                    }
+                    .preview-content li {
+                      margin-bottom: 0.5em;
+                      line-height: 1.6;
+                      color: hsl(var(--muted-foreground));
+                    }
+                    .preview-content li::marker {
+                      color: hsl(var(--primary));
+                    }
+                    .preview-content strong {
+                      font-weight: 600;
+                      color: hsl(var(--foreground));
+                    }
+                    .preview-content blockquote {
+                      margin: 1.5em 0;
+                      padding: 1em 1.25em;
+                      border-left: 4px solid hsl(var(--primary));
+                      background: hsl(var(--primary) / 0.05);
+                      border-radius: 0 8px 8px 0;
+                      font-style: italic;
+                      color: hsl(var(--foreground));
+                    }
+                    .preview-content table {
+                      width: 100%;
+                      border-collapse: collapse;
+                      margin: 1.5em 0;
+                    }
+                    .preview-content th,
+                    .preview-content td {
+                      border: 1px solid hsl(var(--border));
+                      padding: 0.75em;
+                      text-align: left;
+                    }
+                    .preview-content th {
+                      background: hsl(var(--primary) / 0.1);
+                      font-weight: 600;
+                      color: hsl(var(--primary));
+                    }
+                  `}</style>
+                  <div
+                    ref={contentRef}
+                    className="preview-content"
+                    dangerouslySetInnerHTML={{ __html: selectedMagnet.content }}
+                  />
+                </div>
+              </motion.div>
             </motion.div>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {deleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+              onClick={() => !isDeleting && setDeleteConfirm(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-background rounded-2xl max-w-md w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <Warning size={24} className="text-destructive" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">Delete Lead Magnet?</h3>
+                    <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                  </div>
+                </div>
+                <p className="text-muted-foreground mb-6">
+                  Are you sure you want to delete "<strong>{deleteConfirm.title}</strong>"?
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    disabled={isDeleting}
+                    onClick={() => setDeleteConfirm(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    disabled={isDeleting}
+                    onClick={confirmDelete}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <CircleNotch size={16} className="animate-spin mr-2" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash size={16} className="mr-2" />
+                        Delete
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

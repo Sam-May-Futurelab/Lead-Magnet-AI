@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { Header } from '@/components/Header';
-import { HomePage } from '@/components/HomePage';
+import { LoginPage } from '@/components/LoginPage';
 import { CreatePage } from '@/components/CreatePage';
 import { DashboardPage } from '@/components/DashboardPage';
-import { AuthModal } from '@/components/AuthModal';
+import { SettingsPage } from '@/components/SettingsPage';
+import { PaywallPage } from '@/components/PaywallPage';
+import { PrivacyPolicyPage } from '@/components/PrivacyPolicyPage';
+import { TermsOfServicePage } from '@/components/TermsOfServicePage';
 import { cn } from '@/lib/utils';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const { actualTheme } = useTheme();
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Apply theme class to document
   useEffect(() => {
@@ -28,55 +30,39 @@ function AppContent() {
     );
   }
 
+  // Not logged in - show login screen
+  if (!user) {
+    return (
+      <div className={cn('min-h-screen bg-background', actualTheme === 'dark' && 'dark')}>
+        <LoginPage />
+      </div>
+    );
+  }
+
+  // Logged in - show main app
   return (
     <div className={cn('min-h-screen bg-background', actualTheme === 'dark' && 'dark')}>
-      <Header onAuthClick={() => setShowAuthModal(true)} />
-      
+      <Header />
+
       <main className="safe-bottom">
         <Routes>
-          {/* Public routes */}
-          <Route 
-            path="/" 
-            element={<HomePage onAuthClick={() => setShowAuthModal(true)} />} 
-          />
-          
-          {/* Protected routes */}
-          <Route 
-            path="/create" 
-            element={
-              user ? <CreatePage /> : <Navigate to="/" replace />
-            } 
-          />
-          <Route 
-            path="/dashboard" 
-            element={
-              user ? <DashboardPage /> : <Navigate to="/" replace />
-            } 
-          />
-          
-          {/* Profile route - placeholder */}
-          <Route 
-            path="/profile" 
-            element={
-              user ? (
-                <div className="container py-8 px-4 max-w-2xl mx-auto">
-                  <h1 className="text-3xl font-bold mb-4">Profile</h1>
-                  <p className="text-muted-foreground">Coming soon...</p>
-                </div>
-              ) : <Navigate to="/" replace />
-            } 
-          />
-          
-          {/* Catch all - redirect to home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Default to dashboard when logged in */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          {/* Main routes */}
+          <Route path="/create" element={<CreatePage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/paywall" element={<PaywallPage />} />
+
+          {/* Legal pages */}
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
+
+          {/* Catch all - redirect to dashboard */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
-
-      {/* Auth Modal */}
-      <AuthModal 
-        open={showAuthModal} 
-        onOpenChange={setShowAuthModal} 
-      />
     </div>
   );
 }
