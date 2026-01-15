@@ -32,7 +32,7 @@ type Step = 'details' | 'generating' | 'preview';
 export function CreatePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, refreshProfile } = useAuth();
 
   const {
     updateCurrent,
@@ -148,6 +148,8 @@ export function CreatePage() {
         const limits = PLAN_LIMITS[plan];
         try {
           await checkAndIncrementUsage(user.uid, limits.maxLeadMagnets);
+          // Refresh profile to update usage count in UI
+          await refreshProfile();
         } catch (e) {
           console.log('Could not increment usage count:', e);
         }
@@ -376,18 +378,41 @@ export function CreatePage() {
     }
   };
 
+  // Convert HTML to plain text for editing
+  const htmlToText = (html: string): string => {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    // Replace <br> and block elements with newlines
+    temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    temp.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li').forEach(el => {
+      el.prepend(document.createTextNode('\n'));
+    });
+    return temp.textContent || temp.innerText || '';
+  };
+
+  // Convert plain text back to HTML
+  const textToHtml = (text: string): string => {
+    return text
+      .split('\n\n')
+      .map(para => para.trim())
+      .filter(para => para)
+      .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+      .join('\n');
+  };
+
   const handleStartEdit = () => {
-    setEditedContent(generatedContent);
+    setEditedContent(htmlToText(generatedContent));
     setIsEditing(true);
     triggerImpactHaptic('light');
   };
 
   const handleSaveEdit = () => {
-    setGeneratedContent(editedContent);
+    const newHtml = textToHtml(editedContent);
+    setGeneratedContent(newHtml);
     setIsEditing(false);
     // Update in store if we have an ID
     if (currentLeadMagnetId) {
-      updateLeadMagnet(currentLeadMagnetId, { content: editedContent });
+      updateLeadMagnet(currentLeadMagnetId, { content: newHtml });
     }
     triggerNotificationHaptic('success');
   };
@@ -402,8 +427,12 @@ export function CreatePage() {
     <div className="max-w-4xl mx-auto">
       <div className="flex flex-col gap-4 mb-6">
         <h1 className="text-2xl font-bold">{title}</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/dashboard')}>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/dashboard')}
+            className="flex-1 min-w-[100px]"
+          >
             View All
           </Button>
           {isEditing ? (
@@ -411,6 +440,7 @@ export function CreatePage() {
               <Button
                 variant="outline"
                 onClick={handleCancelEdit}
+                className="flex-1 min-w-[100px]"
               >
                 <X size={18} className="mr-2" />
                 Cancel
@@ -418,6 +448,7 @@ export function CreatePage() {
               <Button
                 variant="gradient"
                 onClick={handleSaveEdit}
+                className="flex-1 min-w-[100px]"
               >
                 <FloppyDisk size={18} className="mr-2" />
                 Save
@@ -428,6 +459,7 @@ export function CreatePage() {
               <Button
                 variant="outline"
                 onClick={handleStartEdit}
+                className="flex-1 min-w-[100px]"
               >
                 <PencilSimple size={18} className="mr-2" />
                 Edit
@@ -436,6 +468,7 @@ export function CreatePage() {
                 variant="gradient"
                 onClick={() => handleExport('pdf')}
                 disabled={isExporting}
+                className="flex-1 min-w-[140px]"
               >
                 {isExporting ? (
                   <>
@@ -596,8 +629,8 @@ export function CreatePage() {
               width: 100%;
               min-height: 400px;
               padding: 1.5rem;
-              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-              font-size: 0.875rem;
+              font-family: inherit;
+              font-size: 1rem;
               line-height: 1.6;
               background: hsl(var(--background));
               color: hsl(var(--foreground));
@@ -613,7 +646,7 @@ export function CreatePage() {
               className="edit-textarea"
               value={editedContent}
               onChange={(e) => setEditedContent(e.target.value)}
-              placeholder="Edit your lead magnet content (HTML)..."
+              placeholder="Edit your lead magnet content..."
             />
           ) : (
             <div

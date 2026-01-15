@@ -267,9 +267,9 @@ Do not include <html>, <head>, or <body> tags - just the content HTML.`;
  */
 export function buildUserPrompt(request: GenerationRequest): string {
   const lengthGuide = {
-    short: '300-500 words, focused and concise',
-    standard: '500-800 words, comprehensive but digestible',
-    detailed: '800-1200 words, thorough and in-depth',
+    short: '500-800 words, focused and concise',
+    standard: '1000-1500 words, comprehensive and detailed',
+    detailed: '2000-3000 words, thorough and in-depth',
   };
 
   let prompt = `Create a ${LEAD_MAGNET_TYPES[request.type].label} about: ${request.title}
@@ -298,9 +298,9 @@ TARGET LENGTH: ${lengthGuide[request.length]}`;
  */
 export function estimateGenerationTime(length: Length): number {
   const times = {
-    short: 8,
-    standard: 12,
-    detailed: 18,
+    short: 10,
+    standard: 20,
+    detailed: 35,
   };
   return times[length];
 }
@@ -310,9 +310,9 @@ export function estimateGenerationTime(length: Length): number {
  */
 export function getLengthRange(length: Length): { min: number; max: number } {
   const ranges = {
-    short: { min: 300, max: 500 },
-    standard: { min: 500, max: 800 },
-    detailed: { min: 800, max: 1200 },
+    short: { min: 500, max: 800 },
+    standard: { min: 1000, max: 1500 },
+    detailed: { min: 2000, max: 3000 },
   };
   return ranges[length];
 }

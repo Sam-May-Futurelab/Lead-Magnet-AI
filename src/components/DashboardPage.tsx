@@ -124,9 +124,31 @@ export function DashboardPage() {
     }
   };
 
+  // Convert HTML to plain text for editing
+  const htmlToText = (html: string): string => {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    // Replace <br> and block elements with newlines
+    temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    temp.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li').forEach(el => {
+      el.prepend(document.createTextNode('\n'));
+    });
+    return temp.textContent || temp.innerText || '';
+  };
+
+  // Convert plain text back to HTML
+  const textToHtml = (text: string): string => {
+    return text
+      .split('\n\n')
+      .map(para => para.trim())
+      .filter(para => para)
+      .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+      .join('\n');
+  };
+
   const handleStartEdit = () => {
     if (selectedMagnet) {
-      setEditedContent(selectedMagnet.content);
+      setEditedContent(htmlToText(selectedMagnet.content));
       setIsEditing(true);
       triggerImpactHaptic('light');
     }
@@ -134,8 +156,9 @@ export function DashboardPage() {
 
   const handleSaveEdit = () => {
     if (selectedMagnet) {
-      updateLeadMagnet(selectedMagnet.id, { content: editedContent });
-      setSelectedMagnet({ ...selectedMagnet, content: editedContent });
+      const newHtml = textToHtml(editedContent);
+      updateLeadMagnet(selectedMagnet.id, { content: newHtml });
+      setSelectedMagnet({ ...selectedMagnet, content: newHtml });
       setIsEditing(false);
       triggerNotificationHaptic('success');
     }
@@ -492,8 +515,8 @@ export function DashboardPage() {
                       width: 100%;
                       min-height: 300px;
                       padding: 1rem;
-                      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                      font-size: 0.875rem;
+                      font-family: inherit;
+                      font-size: 1rem;
                       line-height: 1.6;
                       background: hsl(var(--background));
                       color: hsl(var(--foreground));
@@ -511,7 +534,7 @@ export function DashboardPage() {
                       className="edit-textarea"
                       value={editedContent}
                       onChange={(e) => setEditedContent(e.target.value)}
-                      placeholder="Edit your lead magnet content (HTML)..."
+                      placeholder="Edit your lead magnet content..."
                     />
                   ) : (
                     <div

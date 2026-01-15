@@ -28,7 +28,7 @@ const LEAD_MAGNET_TYPES: Record<LeadMagnetType, { label: string; description: st
 
 function buildSystemPrompt(type: LeadMagnetType, tone: Tone): string {
   const typeInfo = LEAD_MAGNET_TYPES[type];
-  
+
   const toneInstructions = {
     professional: 'Use a polished, authoritative tone. Sound confident and expert.',
     friendly: 'Use a warm, conversational tone. Be approachable and relatable.',
@@ -59,9 +59,9 @@ Do not wrap in code blocks or markdown.`;
 
 function buildUserPrompt(request: GenerationRequest): string {
   const lengthGuide = {
-    short: '300-500 words, focused and concise',
-    standard: '500-800 words, comprehensive but digestible',
-    detailed: '800-1200 words, thorough and in-depth',
+    short: '500-800 words, focused and concise',
+    standard: '1000-1500 words, comprehensive and detailed',
+    detailed: '2000-3000 words, thorough and in-depth',
   };
 
   let prompt = `Create a ${LEAD_MAGNET_TYPES[request.type].label} about: ${request.title}
@@ -118,8 +118,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Validate request
     if (!request.type || !request.title || !request.prompt) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: type, title, prompt' 
+      return res.status(400).json({
+        error: 'Missing required fields: type, title, prompt'
       });
     }
 
@@ -140,16 +140,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: request.length === 'detailed' ? 6000 : request.length === 'standard' ? 3000 : 1500,
       }),
     });
 
     if (!openaiResponse.ok) {
       const error = await openaiResponse.json();
       console.error('OpenAI API error:', error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'AI generation failed',
-        details: error.error?.message 
+        details: error.error?.message
       });
     }
 
@@ -175,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   } catch (error) {
     console.error('Generation error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'
     });

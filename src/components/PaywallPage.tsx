@@ -7,12 +7,14 @@ import {
     X,
     Infinity,
     CircleNotch,
+    Crown,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { useRevenueCat } from '@/hooks/use-revenuecat';
 import { triggerImpactHaptic, triggerNotificationHaptic } from '@/lib/haptics';
+import { triggerCelebration } from '@/lib/confetti';
 import { updateUserPlan } from '@/lib/firebase';
 
 interface PricingTier {
@@ -92,7 +94,7 @@ interface PaywallPageProps {
 
 export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
     const navigate = useNavigate();
-    const { user, userProfile } = useAuth();
+    const { user, userProfile, refreshProfile } = useAuth();
     const {
         isSupported,
         proPackage,
@@ -101,6 +103,7 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
         restore,
     } = useRevenueCat();
     const [purchasing, setPurchasing] = useState<string | null>(null);
+    const [purchaseSuccess, setPurchaseSuccess] = useState<{ plan: string; name: string } | null>(null);
 
     const currentPlan = userProfile?.plan || 'free';
 
@@ -148,8 +151,19 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
             if (success && user) {
                 // Update user's plan in Firestore
                 await updateUserPlan(user.uid, tier.id);
+
+                // Refresh the user profile to update UI immediately
+                await refreshProfile();
+
+                // Show success state with celebration
                 triggerNotificationHaptic('success');
-                onClose?.();
+                triggerCelebration();
+                setPurchaseSuccess({ plan: tier.id, name: tier.name });
+
+                // Auto-close after showing success
+                setTimeout(() => {
+                    onClose?.() || navigate('/dashboard');
+                }, 2500);
             }
         } catch (error) {
             console.error('Purchase error:', error);
@@ -167,9 +181,13 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
             // Mock restore for web dev
             if (user) {
                 await updateUserPlan(user.uid, 'pro');
+                await refreshProfile();
                 triggerNotificationHaptic('success');
-                alert('Restored PRO for testing');
-                onClose?.() || navigate('/dashboard');
+                triggerCelebration();
+                setPurchaseSuccess({ plan: 'pro', name: 'Pro' });
+                setTimeout(() => {
+                    onClose?.() || navigate('/dashboard');
+                }, 2500);
                 return;
             }
             alert('Restore purchases is only available in the iOS app.');
@@ -181,9 +199,13 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
             const success = await restore();
 
             if (success) {
+                await refreshProfile();
                 triggerNotificationHaptic('success');
-                alert('Purchases restored successfully!');
-                onClose?.() || navigate('/dashboard');
+                triggerCelebration();
+                setPurchaseSuccess({ plan: 'pro', name: 'Pro' });
+                setTimeout(() => {
+                    onClose?.() || navigate('/dashboard');
+                }, 2500);
             } else {
                 triggerNotificationHaptic('warning');
                 alert('No previous purchases found.');
@@ -196,6 +218,31 @@ export function PaywallPage({ onClose, trigger = 'manual' }: PaywallPageProps) {
             setPurchasing(null);
         }
     };
+
+    // Success overlay after purchase
+    if (purchaseSuccess) {
+        return (
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+                <div className="text-center space-y-6 animate-in fade-in zoom-in duration-500">
+                    <div className="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-2xl shadow-primary/30 animate-in zoom-in duration-700">
+                        <Crown size={48} weight="fill" className="text-white" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                            Welcome to {purchaseSuccess.name}!
+                        </h1>
+                        <p className="text-muted-foreground">
+                            Your account has been upgraded successfully
+                        </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                        <CircleNotch size={16} className="animate-spin" />
+                        <span>Redirecting you...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-background py-4 px-4 sm:px-6 flex flex-col items-center">
