@@ -296,20 +296,32 @@ export function CreatePage() {
     </div>
   );
 
-  const renderGenerating = () => (
-    <div className="max-w-md mx-auto py-12">
-      <AILoading
-        variant="magic"
-        messages={[
-          'Analyzing your topic...',
-          'Drafting content...',
-          'Polishing items...',
-          'Adding finishing touches...',
-        ]}
-        currentOperation="Creating your lead magnet"
-      />
-    </div>
-  );
+  const renderGenerating = () => {
+    // Estimate duration based on length setting
+    const durationByLength: Record<Length, number> = {
+      short: 30,      // ~30 seconds for short
+      standard: 60,   // ~1 minute for standard
+      detailed: 120,  // ~2 minutes for detailed
+    };
+
+    return (
+      <div className="max-w-md mx-auto py-12">
+        <AILoading
+          variant="magic"
+          expectedDuration={durationByLength[length]}
+          messages={[
+            'Analyzing your topic...',
+            'Researching best practices...',
+            'Crafting actionable items...',
+            'Writing detailed content...',
+            'Polishing for maximum impact...',
+            'Adding finishing touches...',
+          ]}
+          currentOperation="Creating your lead magnet"
+        />
+      </div>
+    );
+  };
 
   const handleExport = async (format: 'pdf' | 'html') => {
     if (!generatedContent) return;

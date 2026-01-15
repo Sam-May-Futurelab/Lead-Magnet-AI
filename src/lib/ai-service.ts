@@ -189,9 +189,15 @@ export async function generateLeadMagnetContent(
     }
 
     const data = await response.json();
-    console.log('[AI Service] Got response data:', data.success);
+    console.log('[AI Service] Initial response data:', JSON.stringify(data));
 
-    // Get the raw content and format it to HTML
+    // Check if this is an async job (Inngest queued)
+    if (data.jobId && data.status === 'pending') {
+      console.log('[AI Service] Job queued, starting polling for jobId:', data.jobId);
+      return await pollForJobCompletion(data.jobId, endpoint);
+    }
+
+    // If we got content directly (no async), return it
     const rawContent = data.content || data.html || data.result || '';
     const htmlContent = formatContentToHtml(rawContent);
 
@@ -207,6 +213,72 @@ export async function generateLeadMagnetContent(
     console.error('[AI Service] Generation error:', error);
     throw error;
   }
+}
+
+/**
+ * Poll for async job completion (Inngest)
+ */
+async function pollForJobCompletion(
+  jobId: string,
+  endpoint: string,
+  maxAttempts = 60,
+  intervalMs = 3000
+): Promise<GenerationResponse> {
+  console.log(`[AI Service] Polling for job ${jobId}, max ${maxAttempts} attempts`);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Wait before polling (except first attempt)
+    if (attempt > 1) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    try {
+      const pollUrl = `${endpoint}?jobId=${jobId}`;
+      console.log(`[AI Service] Poll attempt ${attempt}/${maxAttempts}: ${pollUrl}`);
+
+      const response = await fetch(pollUrl, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        console.warn(`[AI Service] Poll returned status ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      console.log(`[AI Service] Poll response:`, JSON.stringify(data));
+
+      if (data.status === 'completed' && data.content) {
+        console.log('[AI Service] Job completed successfully!');
+        const rawContent = data.content || '';
+        const htmlContent = formatContentToHtml(rawContent);
+
+        return {
+          success: true,
+          content: htmlContent,
+          rawContent: rawContent,
+          wordCount: data.wordCount || countWords(rawContent),
+          itemCount: data.itemCount,
+        };
+      }
+
+      if (data.status === 'failed') {
+        throw new Error(data.error || 'Generation failed');
+      }
+
+      // Still pending, continue polling
+      console.log(`[AI Service] Job still ${data.status}, continuing to poll...`);
+    } catch (error) {
+      console.error(`[AI Service] Poll attempt ${attempt} error:`, error);
+      // Continue polling unless it's a definitive failure
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error('Generation timed out. Please try again.');
 }
 
 /**
