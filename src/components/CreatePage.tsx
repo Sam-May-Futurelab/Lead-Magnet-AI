@@ -107,9 +107,10 @@ export function CreatePage() {
       if (response.success) {
         setGeneratedContent(response.content);
 
-        // Try to save to Firestore (may fail due to permissions, but that's okay)
+        // Save to Firestore
         let id = `local-${Date.now()}`;
         try {
+          console.log('[CreatePage] Attempting to save lead magnet to Firestore for user:', user.uid);
           id = await createLeadMagnet(user.uid, {
             userId: user.uid,
             title,
@@ -135,8 +136,9 @@ export function CreatePage() {
               showLogo: false,
             },
           });
+          console.log('[CreatePage] ✅ Lead magnet saved to Firestore with ID:', id);
         } catch (firestoreError) {
-          console.log('Could not save to Firestore (permissions), using local ID:', firestoreError);
+          console.error('[CreatePage] ❌ Failed to save lead magnet to Firestore:', firestoreError);
         }
 
         triggerNotificationHaptic('success');

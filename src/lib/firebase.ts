@@ -363,8 +363,16 @@ export const createLeadMagnet = async (
   const leadMagnetsRef = collection(db, 'leadMagnets');
   const newDocRef = doc(leadMagnetsRef);
 
+  // Sanitize data - Firestore doesn't allow undefined values
+  const sanitizedData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(leadMagnet)) {
+    if (value !== undefined) {
+      sanitizedData[key] = value;
+    }
+  }
+
   await setDoc(newDocRef, {
-    ...leadMagnet,
+    ...sanitizedData,
     id: newDocRef.id,
     userId,
     createdAt: serverTimestamp(),
